@@ -1,0 +1,23 @@
+# CPU版本的依赖包
+torch>=1.10.0
+torchvision>=0.11.0
+torchaudio>=0.10.0
+
+# BLIP相关依赖
+timm==0.4.12
+transformers==4.15.0
+fairscale==0.4.4
+
+# 图像处理
+Pillow>=8.0.0
+
+# GUI界面
+tkinter  # 通常Python自带，如果没有需要安装
+
+# 其他工具
+requests>=2.25.0
+numpy>=1.20.0
+
+# 可选：如果需要更好的文本处理
+# jieba>=0.42.1  # 中文分词
+# nltk>=3.6      # 英文文本处理
