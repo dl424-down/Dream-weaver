@@ -14,7 +14,11 @@ from PIL import Image
 import requests
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
+from dotenv import load_dotenv
 
+# 1. 加载环境变量
+load_dotenv()
+api_key=os.getenv("DASHSCOPE_API_KEY")
 # 尝试导入PyTorch相关模块，如果失败则使用演示模式
 try:
     import torch
@@ -27,21 +31,103 @@ except ImportError:
 # 使用HuggingFace的BLIP模型（避免本地BLIP依赖与transformers版本冲突）
 BLIP_AVAILABLE = TORCH_AVAILABLE
 
+class DashScopeLLM:
+    """
+    封装对通义千问（DashScope）API 的调用。
+    使用示例：
+        llm = DashScopeLLM()
+        result = llm.generate("我梦见我正在被人追杀")
+    """
+    #client:any
+    #model:str="qwen-plus"
+    #temperature:float=0.7
+    def __init__(self, api_key=None, model="qwen-plus", temperature=0.7):
+        self.api_key =os.getenv("DASHSCOPE_API_KEY")
+        self.model = model
+        self.temperature = temperature
+        self.base_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+        if not self.api_key:
+            raise ValueError("❌ 未找到 DASHSCOPE_API_KEY，请在 .env 文件中设置。")
+
+    def generate(self, prompt: str, system_prompt: str = "你是一名梦境情绪与象征分析专家。") -> str:
+        #向通义千问发送文本请求
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            }
+            body = {
+                "model": self.model,
+                "input":{
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ]
+                },
+                "parameters":{
+                    "temperature": self.temperature,
+                    "max_tokens": 512
+                }
+            }
+            print(f"正在调用模型: {self.model}") #调试
+            response = requests.post(self.base_url, headers=headers, json=body)
+            print(f"响应状态码: {response.status_code}")
+            if response.status_code != 200:
+                print(f"错误响应: {response.text}")
+            response.raise_for_status()
+            result = response.json()
+
+            # 修正响应解析 - 处理不同的返回格式
+            if "output" in result:
+                output = result["output"]
+                
+                # 情况1: 直接返回文本内容
+                if "text" in output:
+                    content = output["text"].strip()
+                    print(f"模型返回内容: {content}")
+                    return content
+                
+                # 情况2: 通过choices返回
+                elif "choices" in output and len(output["choices"]) > 0:
+                    choice = output["choices"][0]
+                    if "message" in choice and "content" in choice["message"]:
+                        return choice["message"]["content"].strip()
+            
+            print(f"意外响应格式: {result}")
+            return ""
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ 网络请求失败: {e}")
+            return ""
+        except Exception as e:
+            print(f"❌ 调用通义千问失败: {e}")
+            return ""
+
 class DreamAnalyzer:
     """梦境分析器主类"""
-    
-    def __init__(self, device='cpu'):
-        """
-        初始化梦境分析器
-        Args:
-            device: 运行设备，默认CPU
-        """
-        if TORCH_AVAILABLE:
-            self.device = torch.device(device)
-        else:
-            self.device = device
-        self.image_size = 224  # 为CPU优化，使用较小尺寸
+    def __init__(self, device='cpu', use_qwen=True):
+        self.use_qwen = use_qwen
+        self.device = torch.device(device) if TORCH_AVAILABLE else device
+        self.image_size = 224
         
+        # API配置
+        self.API_KEY = os.getenv("DASHSCOPE_API_KEY") 
+        self.MODEL = "qwen-plus"
+        self.llm = DashScopeLLM(api_key=self.API_KEY, model=self.MODEL)
+
+        '''
+        def __init__(self, device='cpu'):
+            """
+            初始化梦境分析器
+            Args:
+                device: 运行设备，默认CPU
+            """
+            if TORCH_AVAILABLE:
+                self.device = torch.device(device)
+            else:
+                self.device = device
+            self.image_size = 224  # 为CPU优化，使用较小尺寸
+        '''
         # 情绪关键词字典
         self.emotion_keywords = {
             '快乐': ['开心', '高兴', '愉快', '欢乐', '兴奋', '满足', '幸福', '喜悦'],
@@ -117,7 +203,100 @@ class DreamAnalyzer:
         except Exception as e:
             print(f"图像预处理失败: {e}")
             return None, None
-    
+    def analyze_dream_with_qwen(self, dream_text: str) -> dict:
+        """
+        使用通义千问模型分析梦境文本，提取情绪、主题、关键词等。
+        """
+        prompt = f"""
+        请分析以下梦境描述，提取以下三个核心信息并以 JSON 格式返回：
+
+        1. emotions: 梦者在梦中表现出的主要情绪（如焦虑、恐惧、平静、快乐、悲伤、愤怒等），列出1-5个最显著的情绪
+        2. themes: 梦境的主要主题和场景（如飞行、追逐、坠落、考试、迷路、重逢等），概括出1-2个核心主题
+        3. keywords: 梦境中的关键元素和象征物（如人物、物品、环境、动作等），提取5-8个最重要的关键词
+        梦境描述：{dream_text}
+
+        请严格按照以下JSON格式输出，不要添加任何其他文字：
+        {{
+            "emotions": ["情绪1", "情绪2"，"情绪3"，"情绪4"，"情绪5"],
+            "themes": ["主题1", "主题2"], 
+            "keywords": ["关键词1", "关键词2", "关键词3"]
+        }}
+        """
+
+        try:
+            content = self.llm.generate(prompt)
+            print(f"模型原始响应: {content}")  # 调试信息
+            # 清理响应内容，移除可能的Markdown代码块标记
+            cleaned_content = content.strip()
+            if cleaned_content.startswith('```json'):
+                cleaned_content = cleaned_content[7:]
+            if cleaned_content.startswith('```'):
+                cleaned_content = cleaned_content[3:]
+            if cleaned_content.endswith('```'):
+                cleaned_content = cleaned_content[:-3]
+            cleaned_content = cleaned_content.strip()
+            # 尝试解析JSON
+            try:
+                data = json.loads(content)
+                print(f"成功解析JSON: {data}")  # 调试信息
+            except json.JSONDecodeError as e:
+                print(f"JSON解析失败: {e}")
+                print(f"清理后的内容: {cleaned_content}")
+                # 尝试从文本中提取信息
+                data = self._parse_analysis_response(cleaned_content)
+             # 确保所有必需的字段都存在
+            if "emotions" not in data:
+               data["emotions"] = []
+            if "themes" not in data:
+                data["themes"] = []
+            if "keywords" not in data:
+                data["keywords"] = []
+                
+            return data
+        
+        except Exception as e:
+            print(f"调用通义千问失败: {e}")
+            return {
+                "emotions": [],
+                "themes": [],
+                "keywords": []
+            }
+
+    def _parse_analysis_response(self, content: str) -> dict:
+        #备用方法：当模型返回非标准JSON时手动解析
+        data = {"emotions": [], "themes": [], "keywords": []}
+        # 简单正则匹配
+        try:
+            emotion_matches = re.findall(r'"emotions":\s*\[(.*?)\]', content, re.DOTALL)
+            theme_matches = re.findall(r'"themes":\s*\[(.*?)\]', content, re.DOTALL)
+            keyword_matches = re.findall(r'"keywords":\s*\[(.*?)\]', content, re.DOTALL)
+            
+            if emotion_matches:
+                emotions_str = emotion_matches[0]
+                # 处理引号和逗号分隔的值
+                emotions = re.findall(r'"([^"]*)"', emotions_str)
+                if not emotions:
+                    emotions = [e.strip() for e in emotions_str.split(",") if e.strip()]
+                data["emotions"] = [e for e in emotions if e]
+            
+            if theme_matches:
+                themes_str = theme_matches[0]
+                themes = re.findall(r'"([^"]*)"', themes_str)
+                if not themes:
+                    themes = [t.strip() for t in themes_str.split(",") if t.strip()]
+                data["themes"] = [t for t in themes if t]
+            
+            if keyword_matches:
+                keywords_str = keyword_matches[0]
+                keywords = re.findall(r'"([^"]*)"', keywords_str)
+                if not keywords:
+                    keywords = [k.strip() for k in keywords_str.split(",") if k.strip()]
+                data["keywords"] = [k for k in keywords if k]
+        except Exception as e:
+            print(f"手动解析失败: {e}")
+        
+        return data
+
     def analyze_dream_text(self, dream_text: str) -> Dict:
         """
         分析梦境文本描述
@@ -224,60 +403,114 @@ class DreamAnalyzer:
     
     def analyze_dream(self, dream_text: str, image_path: str = None) -> Dict:
         """
-        综合分析梦境
-        Args:
-            dream_text: 梦境文本描述
-            image_path: 相关图像路径（可选）
-        Returns:
-            完整的分析结果
+        综合分析梦境，整合三个核心功能
         """
+        print("开始分析梦境...")
+        
+        # 功能1: 提取三要素（情绪、主题、关键词）
+        print("正在提取梦境核心要素...")
+        core_elements = self.analyze_dream_with_qwen(dream_text)
+        
+        # 功能2: 生成详细分析报告
+        print("正在生成详细分析...")
+        detailed_analysis = self.generate_detailed_analysis(
+            dream_text, 
+            core_elements.get('emotions', []),
+            core_elements.get('themes', []), 
+            core_elements.get('keywords', [])
+        )
+        
+        # 功能3: 生成视觉化提示（可选）
+        print(" 正在生成视觉化提示")
+        visualization_prompt = self.generate_visualization_prompt(
+            core_elements.get('emotions', []),
+            core_elements.get('themes', []),
+            core_elements.get('keywords', [])
+        )
+        
+        # 整合结果
         result = {
-            'text_analysis': self.analyze_dream_text(dream_text),
-            'image_caption': None,
-            'combined_analysis': '',
-            'visualization_prompt': ''
+            'core_elements': {
+                'emotions': core_elements.get('emotions', []),
+                'themes': core_elements.get('themes', []),
+                'keywords': core_elements.get('keywords', [])
+            },
+            'detailed_analysis': detailed_analysis,
+            'visualization_prompt': visualization_prompt,
+            'image_caption': None
         }
         
         # 如果有图像，生成图像描述
         if image_path:
+            print("正在分析梦境图像...")
             result['image_caption'] = self.generate_image_caption(image_path)
         
-        # 生成综合分析
-        text_analysis = result['text_analysis']
-        combined_parts = [text_analysis['analysis']]
-        
-        if result['image_caption']:
-            combined_parts.append(f"相关图像显示：{result['image_caption']}")
-        
-        result['combined_analysis'] = ' '.join(combined_parts)
-        
-        # 生成视觉化提示词
-        emotions = text_analysis['emotions']
-        themes = text_analysis['themes']
-        keywords = text_analysis['keywords'][:5]  # 取前5个关键词
+        print("梦境分析完成！")
+        return result
+
+    def generate_visualization_prompt(self, emotions: list, themes: list, keywords: list) -> str:
+        """
+        基于三要素生成视觉化提示词
+        """
+        if not any([emotions, themes, keywords]):
+            return "一个抽象的艺术表达"
         
         prompt_parts = []
+        
+        # 添加主题
         if themes:
-            prompt_parts.append(f"梦境场景包含{', '.join(themes)}")
+            prompt_parts.append(f"{'、'.join(themes)}场景")
+        
+        # 添加关键元素
         if keywords:
-            prompt_parts.append(f"关键元素：{', '.join(keywords)}")
+            key_elements = keywords[:3]  # 取前3个最重要的关键词
+            prompt_parts.append(f"包含{'、'.join(key_elements)}")
+        
+        # 添加情绪氛围
         if emotions:
-            emotion_styles = {
-                '快乐': '明亮温暖的色调，阳光灿烂',
-                '焦虑': '紧张的氛围，不安定的构图',
-                '恐惧': '阴暗神秘的环境，戏剧性的光影',
-                '悲伤': '柔和忧郁的色彩，雨天或黄昏',
-                '愤怒': '强烈对比的色彩，动态的构图',
-                '平静': '和谐宁静的画面，柔和的光线',
-                '困惑': '迷雾缭绕，模糊不清的边界'
+            emotion_mapping = {
+                '快乐': '明亮温暖、阳光灿烂的氛围',
+                '焦虑': '紧张不安、扭曲变形的风格',
+                '恐惧': '阴暗神秘、戏剧性光影',
+                '悲伤': '柔和忧郁、雨天黄昏色调', 
+                '愤怒': '强烈对比、动态混乱的构图',
+                '平静': '和谐宁静、柔和光线的画面',
+                '困惑': '迷雾缭绕、模糊边界的超现实'
             }
-            primary_emotion = emotions[0]
-            if primary_emotion in emotion_styles:
-                prompt_parts.append(emotion_styles[primary_emotion])
+            primary_emotion = emotions[0] if emotions else '平静'
+            mood = emotion_mapping.get(primary_emotion, '超现实梦幻风格')
+            prompt_parts.append(mood)
         
-        result['visualization_prompt'] = '，'.join(prompt_parts)
+        # 添加艺术风格
+        prompt_parts.append("梦幻般的超现实主义艺术风格，细腻的质感和氛围")
         
-        return result
+        return '，'.join(prompt_parts)
+    def generate_detailed_analysis(self, dream_text: str, emotions: list, themes: list, keywords: list) -> str:
+        """
+        基于提取的三要素生成详细的梦境分析报告
+        """
+        if not emotions and not themes and not keywords:
+            return "无法从梦境描述中提取足够的信息进行详细分析。"
+            
+        analysis_prompt = f"""
+        基于以下梦境分析结果，生成一段详细的心理分析解释：
+
+        梦境描述：{dream_text}
+        识别出的情绪：{', '.join(emotions) if emotions else '未识别出明显情绪'}
+        梦境主题：{', '.join(themes) if themes else '未识别出明显主题'} 
+        关键元素：{', '.join(keywords) if keywords else '未提取到关键元素'}
+
+        请从心理学角度分析这个梦境可能反映的心理状态、潜在的压力源或内心冲突，
+        并提供一些建设性的解读建议。分析要专业且有同理心，长度在100-150字左右。
+        请直接返回分析内容，不要添加额外的说明或标记。
+        """
+
+        try:
+            analysis = self.llm.generate(analysis_prompt, "你是一名专业的梦境心理分析师")
+            return analysis if analysis else "暂时无法生成详细分析。"
+        except Exception as e:
+            print(f"生成详细分析失败: {e}")
+            return "梦境分析暂时无法提供详细解读。"
 
 def main():
     """主函数，支持命令行参数传入梦境文本"""
@@ -295,12 +528,38 @@ def main():
     analyzer = DreamAnalyzer()
     result = analyzer.analyze_dream(dream_text)
     
-    print("=== 梦境分析结果 ===")
-    print(f"情绪分析: {result['text_analysis']['emotions']}")
-    print(f"主题分析: {result['text_analysis']['themes']}")
-    print(f"关键词: {result['text_analysis']['keywords']}")
-    print(f"心理分析: {result['text_analysis']['analysis']}")
-    print(f"视觉化提示: {result['visualization_prompt']}")
-
+    print("\n" + "="*60)
+    print("梦境分析结果")
+    print("="*60)
+    
+    # 输出功能1: 核心三要素
+    core_elements = result['core_elements']
+    print(f"\n 核心分析要素:")
+    print(f"  情绪识别: {', '.join(core_elements['emotions']) if core_elements['emotions'] else '暂无'}")
+    print(f"  主题概括: {', '.join(core_elements['themes']) if core_elements['themes'] else '暂无'}")
+    print(f"  关键词: {', '.join(core_elements['keywords']) if core_elements['keywords'] else '暂无'}")
+    
+    # 输出功能2: 详细分析
+    print(f"\n📝 详细心理分析:")
+    detailed_analysis = result.get('detailed_analysis', '分析失败')
+    # 格式化输出，每行适当长度
+    import textwrap
+    for line in textwrap.wrap(detailed_analysis, width=50):
+        print(f"  {line}")
+    
+    # 输出功能3: 视觉化提示
+    visualization_prompt = result.get('visualization_prompt', '')
+    if visualization_prompt:
+        print(f"\n视觉化提示:")
+        print(f"  {visualization_prompt}")
+    
+    print("="*60)
+    
+    # 如果有图像分析，也输出
+    if result['image_caption']:
+        print(f"\n图像描述:")
+        print(f"  {result['image_caption']}")
+    
+    print("="*60)
 if __name__ == "__main__":
     main()
