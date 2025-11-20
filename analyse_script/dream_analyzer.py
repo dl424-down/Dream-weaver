@@ -540,7 +540,7 @@ def main():
     print(f"  关键词: {', '.join(core_elements['keywords']) if core_elements['keywords'] else '暂无'}")
     
     # 输出功能2: 详细分析
-    print(f"\n📝 详细心理分析:")
+    print(f"\n📝 具体心理分析:")
     detailed_analysis = result.get('detailed_analysis', '分析失败')
     # 格式化输出，每行适当长度
     import textwrap
