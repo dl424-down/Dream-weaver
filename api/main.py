@@ -52,7 +52,7 @@ async def health_check():
 async def analyze_text_only(
     dream_text: str = Form(..., description="梦境文本描述")
 ):
-    """仅分析文本梦境，不处理图片"""
+    """仅分析梦境文本，不处理图片"""
     try:
         result = analyzer.analyze_dream(dream_text, image_path=None)
         
