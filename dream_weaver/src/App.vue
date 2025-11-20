@@ -25,12 +25,24 @@ async function analyze() {
   if (imageFile.value) form.append('image', imageFile.value)
   loading.value = true
   try {
-    const resp = await fetch('http://localhost:8000/analyze', {
+    const resp = await fetch('http://localhost:8000/analyze/text', {
       method: 'POST',
       body: form
     })
     if (!resp.ok) throw new Error('请求失败')
-    result.value = await resp.json()
+    const responseData = await resp.json()
+    
+    // 转换数据结构以匹配模板
+    result.value = {
+      text_analysis: {
+        emotions: responseData.data?.emotions || [],
+        themes: responseData.data?.themes || [],
+        keywords: responseData.data?.keywords || []
+      },
+      combined_analysis: responseData.data?.detailed_analysis || '',
+      visualization_prompt: responseData.data?.visualization_prompt || '',
+      image_caption: responseData.data?.image_caption || ''
+    }
   } catch (e) {
     error.value = e.message || String(e)
   } finally {
@@ -49,12 +61,23 @@ async function analyzeTextOnly() {
   form.append('dream_text', dreamText.value)
   loading.value = true
   try {
-    const resp = await fetch('http://localhost:8000/analyze', {
+    const resp = await fetch('http://localhost:8000/analyze/text', {
       method: 'POST',
       body: form
     })
     if (!resp.ok) throw new Error('请求失败')
-    result.value = await resp.json()
+     const responseData = await resp.json()
+    
+    // 转换数据结构以匹配模板
+    result.value = {
+      text_analysis: {
+        emotions: responseData.data?.emotions || [],
+        themes: responseData.data?.themes || [],
+        keywords: responseData.data?.keywords || []
+      },
+      combined_analysis: responseData.data?.detailed_analysis || '',
+      visualization_prompt: responseData.data?.visualization_prompt || ''
+    }
   } catch (e) {
     error.value = e.message || String(e)
   } finally {
