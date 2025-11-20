@@ -5,7 +5,9 @@ import bgImage from './assets/image.jpg'
 const dreamText = ref('')
 const imageFile = ref(null)
 const loading = ref(false)
+const loadingImage = ref(false)
 const result = ref(null)
+const generatedImage = ref(null)
 const error = ref('')
 
 function onFileChange(e) {
@@ -61,6 +63,53 @@ async function analyzeTextOnly() {
     loading.value = false
   }
 }
+
+async function generateImage() {
+  error.value = ''
+  generatedImage.value = null
+  if (!dreamText.value.trim()) {
+    error.value = '请输入您的梦境描述'
+    return
+  }
+  const form = new FormData()
+  form.append('dream_text', dreamText.value)
+  loadingImage.value = true
+  try {
+    // 后端运行在 8000 端口
+    const resp = await fetch('http://localhost:8000/generate-image', {
+      method: 'POST',
+      body: form
+    })
+    if (!resp.ok) throw new Error('请求失败')
+    const j = await resp.json()
+    if (j && j.image) {
+      generatedImage.value = j.image
+    } else {
+      throw new Error(j?.message || '未返回图像')
+    }
+  } catch (e) {
+    error.value = e.message || String(e)
+    // 回退到一个简单的 SVG data URI，保证前端总能显示图
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450">'
+      + '<rect width="100%" height="100%" fill="#0b1220" />'
+      + '<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" '
+      + 'font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#d1fae5">'
+      + 'Image Unavailable</text></svg>'
+    generatedImage.value = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+  } finally {
+    loadingImage.value = false
+  }
+}
+
+function onImgError(e) {
+  // 如果图片加载失败，使用内联 SVG 回退
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450">'
+    + '<rect width="100%" height="100%" fill="#8c78ff" />'
+    + '<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" '
+    + 'font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#0b1220">'
+    + 'Load Error</text></svg>'
+  generatedImage.value = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+}
 </script>
 
 <template>
@@ -87,6 +136,9 @@ async function analyzeTextOnly() {
             </button>
             <button class="btn secondary" :disabled="loading" @click="analyzeTextOnly">
               梦境解析
+            </button>
+            <button class="btn primary" :disabled="loading || loadingImage" @click="generateImage">
+              {{ loadingImage ? '生成中...' : '生成图像' }}
             </button>
           </div>
         </div>
@@ -119,6 +171,15 @@ async function analyzeTextOnly() {
         <div class="block">
           <div class="k">视觉化建议</div>
           <div class="v">{{ result.visualization_prompt }}</div>
+        </div>
+      </div>
+
+      <div class="image-block" v-if="generatedImage || loadingImage">
+        <h2>生成图像</h2>
+        <div class="img-wrap">
+          <div v-if="loadingImage" class="img-placeholder">生成中，请稍候...</div>
+          <img v-else-if="generatedImage" :src="generatedImage" @error="onImgError" class="generated-img" />
+          <div v-else class="img-placeholder">暂无图像</div>
         </div>
       </div>
     </div>
