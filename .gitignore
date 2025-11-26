@@ -1,0 +1,39 @@
+# Python 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 环境变量文件
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# 项目特定
+node_modules/
+*.code-workspace
+
