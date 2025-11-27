@@ -3,6 +3,8 @@
 
 import os
 import sys
+import shutil
+from datetime import datetime
 
 # 加载 .env 文件
 from dotenv import load_dotenv
@@ -22,8 +24,15 @@ PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 # 复用现有的 DreamAnalyzer（位于 analyse_script 包内）
 from analyse_script.dream_analyzer import DreamAnalyzer
+from db.database import init_db, save_dream_entry, get_recent_entries
+
+init_db()
 
 app = FastAPI(title="Dream Weaver API", version="1.0.0")
 
@@ -46,6 +55,7 @@ async def analyze(
 ):
     image_path = None
     tmp_file = None
+    saved_image_path = None
     try:
         if image is not None:
             suffix = os.path.splitext(image.filename or "")[1] or ".jpg"
@@ -53,8 +63,24 @@ async def analyze(
             with os.fdopen(fd, "wb") as f:
                 f.write(await image.read())
             image_path = tmp_file
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
+            saved_name = f"{timestamp}{suffix}"
+            saved_image_path = os.path.join(UPLOAD_DIR, saved_name)
+            shutil.copy(tmp_file, saved_image_path)
 
         result = analyzer.analyze_dream(dream_text, image_path=image_path)
+        try:
+            entry_id = save_dream_entry(
+                dream_text=dream_text,
+                text_analysis=result.get("text_analysis"),
+                combined_analysis=result.get("combined_analysis"),
+                visualization_prompt=result.get("visualization_prompt"),
+                image_caption=result.get("image_caption"),
+                image_path=saved_image_path,
+            )
+            result['entry_id'] = entry_id  # 在响应中包含记录ID
+        except Exception as db_error:
+            print(f"[WARN] 保存梦境记录失败: {db_error}")
         return JSONResponse(result)
     finally:
         if tmp_file and os.path.exists(tmp_file):
@@ -154,6 +180,23 @@ async def generate_image(dream_text: str = Form(...)):
         "type": "datauri_fallback",
         "message": "演示图像"
     })
+
+@app.get("/dreams/history")
+async def get_dream_history(limit: int = 20):
+    """获取最近的梦境记录"""
+    try:
+        entries = get_recent_entries(limit=limit)
+        return JSONResponse({
+            "success": True,
+            "count": len(entries),
+            "entries": entries
+        })
+    except Exception as e:
+        print(f"[ERROR] 查询梦境记录失败: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
