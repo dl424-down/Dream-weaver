@@ -52,9 +52,15 @@ class DashScopeLLM:
         env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
         load_dotenv(env_path)
         
-        self.api_key = os.environ.get("DASHSCOPE_API_KEY") or "sk-1bb88c7976254a628f3fa470a25b83c0"
+        # 只从环境变量读取，不再在代码中硬编码密钥
+        self.api_key = os.environ.get("DASHSCOPE_API_KEY")
+        if not self.api_key:
+            print("警告：未在环境变量中找到 DASHSCOPE_API_KEY，将使用关键词匹配模式（不调用 DashScope LLM）")
+            return
+
         if DASHSCOPE_AVAILABLE:
             dashscope.api_key = self.api_key
+            print("[DashScope] 已从环境变量加载 API Key")
     
     def call(self, prompt: str, system_prompt: str = None, max_tokens: int = 2000) -> Optional[str]:
         """
@@ -562,6 +568,300 @@ class DreamAnalyzer:
         )
         
         return result
+    
+    def analyze_comprehensive(self, entries: List[Dict]) -> Dict:
+        """
+        综合分析多个梦境记录
+        Args:
+            entries: 梦境记录列表，每个记录包含 dream_text, text_analysis 等字段
+        Returns:
+            综合分析结果，包含评分、总结、建议等
+        """
+        if not entries:
+            return {
+                "overall_score": 50,
+                "sleep_quality": 50,
+                "emotion_score": 50,
+                "summary": "未找到有效的梦境记录",
+                "emotion_breakdown": {},
+                "sleep_analysis": "无法评估",
+                "suggestions": []
+            }
+        
+        # 收集所有梦境文本和分析结果
+        all_dreams = []
+        all_emotions = []
+        all_themes = []
+        
+        for entry in entries:
+            dream_text = entry.get("dream_text", "")
+            text_analysis = entry.get("text_analysis", {})
+            if isinstance(text_analysis, str):
+                try:
+                    import json
+                    text_analysis = json.loads(text_analysis)
+                except:
+                    text_analysis = {}
+            
+            all_dreams.append(dream_text)
+            if text_analysis:
+                all_emotions.extend(text_analysis.get("emotions", []))
+                all_themes.extend(text_analysis.get("themes", []))
+        
+        # 使用LLM进行综合分析
+        if self.use_qwen and self.llm:
+            return self._comprehensive_analysis_with_llm(all_dreams, all_emotions, all_themes, len(entries))
+        else:
+            return self._comprehensive_analysis_with_keywords(all_dreams, all_emotions, all_themes, len(entries))
+    
+    def _comprehensive_analysis_with_llm(self, dreams: List[str], emotions: List[str], themes: List[str], count: int) -> Dict:
+        """使用LLM进行综合分析"""
+        dreams_text = "\n".join([f"梦境{i+1}: {dream}" for i, dream in enumerate(dreams)])
+        
+        prompt = f"""请对以下{count}个梦境进行综合分析，给出精准的评分和评估。
+
+{dreams_text}
+
+请从以下维度进行分析：
+1. 综合状态评分（0-100分）：基于所有梦境的整体情绪、主题、内容，评估用户当前的心理状态
+2. 睡眠质量评分（0-100分）：基于梦境的内容、情绪强度、主题类型，评估睡眠质量
+3. 情绪状态评分（0-100分）：基于情绪分析，评估整体情绪健康度
+4. 情绪分布：统计各种情绪的出现频率和强度
+5. 睡眠质量分析：详细分析睡眠质量的原因
+6. 建议：提供3-5条具体的改善建议
+
+请以JSON格式返回结果，格式如下：
+{{
+    "overall_score": 75,
+    "sleep_quality": 80,
+    "emotion_score": 70,
+    "summary": "综合分析总结（200字左右）",
+    "emotion_breakdown": {{"焦虑": 60, "平静": 30, "快乐": 10}},
+    "sleep_analysis": "睡眠质量详细分析（150字左右）",
+    "suggestions": ["建议1", "建议2", "建议3"]
+}}
+
+请确保评分精准，分析深入，建议实用。只返回JSON，不要其他文字。"""
+        
+        try:
+            response = self.llm.call(prompt, max_tokens=2000)
+            if response:
+                # 尝试提取JSON
+                import json
+                import re
+                # 查找JSON部分
+                json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    # 验证和规范化结果
+                    normalized = self._normalize_comprehensive_result(result)
+
+                    # 如果返回的仍然是“默认占位值”，说明大模型没有按要求返回结构化结果，
+                    # 此时回退到关键词综合分析，保证前端看到的是有内容的、基于梦境的报告。
+                    if (
+                        normalized.get("overall_score") == 50
+                        and normalized.get("sleep_quality") == 50
+                        and normalized.get("emotion_score") == 50
+                        and normalized.get("summary") in ("综合分析完成", "", None)
+                        and not normalized.get("emotion_breakdown")
+                    ):
+                        print("[综合分析] LLM 返回结果疑似占位，回退到关键词综合分析")
+                        return self._comprehensive_analysis_with_keywords(dreams, emotions, themes, count)
+
+                    return normalized
+        except Exception as e:
+            print(f"[WARN] LLM综合分析失败: {e}")
+        
+        # LLM失败，回退到关键词分析
+        return self._comprehensive_analysis_with_keywords(dreams, emotions, themes, count)
+    
+    def _comprehensive_analysis_with_keywords(self, dreams: List[str], emotions: List[str], themes: List[str], count: int) -> Dict:
+        """
+        使用规则对多个梦境进行严谨的综合打分（完全本地，不依赖 LLM）。
+
+        设计思路：
+        - 情绪维度：从情绪标签中统计正负面比例，得到情绪健康度（0-100）
+        - 睡眠维度：从梦境文本中识别睡眠相关正负关键词，得到睡眠质量（0-100）
+        - 综合状态：情绪 60% + 睡眠 40%，更偏向心理状态本身
+        """
+        # -------- 1. 统计情绪标签，计算情绪分布 --------
+        emotion_count: Dict[str, int] = {}
+        for emotion in emotions:
+            if not emotion:
+                continue
+            emotion_count[emotion] = emotion_count.get(emotion, 0) + 1
+
+        total_emotions = sum(emotion_count.values())
+        if total_emotions == 0:
+            # 没有情绪标签时，视为中性
+            total_emotions = 1
+
+        emotion_breakdown = {
+            emotion: round(cnt / total_emotions * 100)
+            for emotion, cnt in emotion_count.items()
+        }
+
+        # 正负情绪集合（可以根据需要继续细化）
+        positive_set = {"快乐", "喜悦", "满足", "幸福", "平静", "放松"}
+        negative_set = {"焦虑", "恐惧", "悲伤", "愤怒", "抑郁", "压力", "不安", "噩梦", "恐慌", "孤独"}
+
+        positive_total = sum(cnt for emo, cnt in emotion_count.items() if emo in positive_set)
+        negative_total = sum(cnt for emo, cnt in emotion_count.items() if emo in negative_set)
+
+        # 情绪指数 E ∈ [-1, 1]：正面越多越接近 1，负面越多越接近 -1
+        balance_den = positive_total + negative_total
+        if balance_den == 0:
+            emotion_index = 0.0
+        else:
+            emotion_index = (positive_total - negative_total) / balance_den
+
+        # 映射到 0-100 分，50 为中性
+        emotion_score = int(round((emotion_index + 1) / 2 * 100))
+        emotion_score = max(0, min(100, emotion_score))
+
+        # -------- 2. 从文本中抽取睡眠相关信号，计算睡眠质量 --------
+        all_text = "。".join(dreams) if dreams else ""
+
+        positive_sleep_words = ["放松", "舒适", "平静", "安详", "入睡", "熟睡", "安心", "安稳", "清醒而愉快"]
+        negative_sleep_words = ["噩梦", "惊醒", "失眠", "难以入睡", "反复醒来", "睡不着", "压迫感", "窒息", "崩溃", "焦虑", "恐惧", "考试", "追赶", "坠落"]
+
+        pos_hits = sum(all_text.count(w) for w in positive_sleep_words)
+        neg_hits = sum(all_text.count(w) for w in negative_sleep_words)
+
+        # 以 70 为基准分，正面每命中一次 +5，负面每命中一次 -8
+        sleep_score_base = 70
+        sleep_score = sleep_score_base + pos_hits * 5 - neg_hits * 8
+
+        # 情绪会影响睡眠评分：极端负面情绪会拉低睡眠，极端正面略微抬高
+        if emotion_score < 40:
+            sleep_score -= 10
+        elif emotion_score > 75:
+            sleep_score += 5
+
+        sleep_quality = max(0, min(100, sleep_score))
+
+        # -------- 3. 计算综合状态分：更偏向情绪状态 --------
+        overall_score = int(round(emotion_score * 0.6 + sleep_quality * 0.4))
+        overall_score = max(0, min(100, overall_score))
+
+        # -------- 4. 生成文字总结 --------
+        if emotion_count:
+            dominant_emotion = max(emotion_count.items(), key=lambda x: x[1])[0]
+        else:
+            dominant_emotion = "平静"
+
+        summary_parts = [f"基于{count}个梦境的分析，您当前的主要情绪倾向是{dominant_emotion}。"]
+        if overall_score >= 80:
+            summary_parts.append("整体心理状态较为健康稳定，能够较好地应对生活中的压力与变化。")
+        elif overall_score >= 60:
+            summary_parts.append("整体状态尚可，但存在一定的情绪波动，可能与近期压力或重要事件有关。")
+        elif overall_score >= 40:
+            summary_parts.append("整体状态偏向紧张或低落，梦境中负面情绪信号较为明显，建议适当减压并关注自我照顾。")
+        else:
+            summary_parts.append("整体状态处于较高风险区间，梦境中反复出现强烈的焦虑、恐惧或无助感，建议认真对待并考虑寻求专业支持。")
+
+        summary = "".join(summary_parts)
+
+        # -------- 5. 睡眠质量文字分析 --------
+        if sleep_quality >= 80:
+            sleep_analysis = (
+                "整体睡眠质量处于较为理想的水平，梦境内容多为可控或正向场景，即使出现少量紧张情节，"
+                "也往往带有解决、化解或顺利收尾的倾向。这通常说明你的身心恢复能力较强，夜间能够较好地完成对白天信息的整理与整合。"
+                "在当前基础上，可以继续保持规律作息和适度运动，避免在睡前大量摄入咖啡因或进行高强度用脑活动，以巩固这种稳定的睡眠状态。"
+            )
+        elif sleep_quality >= 60:
+            sleep_analysis = (
+                f"当前睡眠质量大致处于中等水平（约{sleep_quality}分），梦境中既包含一定程度的紧张、压力或矛盾情节，"
+                "也仍然保留了一些相对平和或可控的场景。这样的梦境模式往往提示：你在日常生活中承受了一定压力，"
+                "但整体仍具备应对与自我调节的能力。通过更加规律的作息、适当减少睡前使用电子设备，以及在白天有意识地安排放松时段，"
+                "可以进一步提高入睡速度与睡眠深度，从而让夜间恢复更加充分。"
+            )
+        elif sleep_quality >= 40:
+            sleep_analysis = (
+                f"当前睡眠质量已经出现明显波动（约{sleep_quality}分），梦境中较多出现焦虑、压迫、失败或被追赶等情节，"
+                "这些内容往往反映出白天累积的紧张与担忧尚未得到有效释放。长此以往，可能会让你在醒来时依然感到疲惫，"
+                "甚至影响白天的专注度与情绪稳定。建议你在日间为自己安排一些“缓冲区”，例如在工作与睡眠之间留出放松时间，"
+                "通过散步、拉伸、轻度运动或与信任的人交流来减轻心理负担，同时逐步建立固定的睡前仪式，帮助大脑形成“可以休息”的信号。"
+            )
+        else:
+            sleep_analysis = (
+                f"当前睡眠质量处于较低水平（约{sleep_quality}分），梦境频繁呈现噩梦、惊醒、无助或强烈恐惧等情节，"
+                "提示身心正承受较大的持续性压力。这类梦境往往并非偶发现象，而是长期紧张、情绪压抑或生活节奏失衡的“报警信号”。"
+                "如果你已经明显感受到白天的疲惫、易怒、注意力难以集中，或对睡眠本身产生担忧，建议尽早正视这一状况，"
+                "一方面从作息、运动、饮食和环境等方面系统改善睡眠条件，另一方面在条件允许时，考虑与专业心理咨询师或精神科医生进行深入评估，"
+                "以获得更有针对性的支持与帮助。"
+            )
+
+        # -------- 6. 生成具体建议 --------
+        suggestions: List[str] = []
+
+        if overall_score < 60:
+            suggestions.append(
+                "为自己预留出固定的放松时段，例如每天睡前30分钟刻意远离工作与屏幕，"
+                "可以进行缓慢深呼吸、简单拉伸、冥想或听舒缓音乐，让身体逐步从“警觉模式”过渡到“休息模式”。"
+            )
+        if negative_total > positive_total:
+            suggestions.append(
+                "建议尝试记录梦境与当天的情绪变化，例如在睡前花5分钟写下令人印象深刻的画面与当下心情，"
+                "这有助于你更清晰地看到压力来源，并在白天找到可以调整或求助的具体方向，而不是把一切都压在心里。"
+            )
+        if "焦虑" in emotion_count or emotion_score < 50:
+            suggestions.append(
+                "如果长期感到紧张、担心或难以放松，且这种状态已经影响到学习、工作或人际关系，"
+                "建议与你信任的家人、朋友或老师交流感受；在条件允许的情况下，考虑预约专业心理咨询，"
+                "通过系统性的评估与对话寻找更深层的原因和应对策略。"
+            )
+        if sleep_quality < 60:
+            suggestions.append(
+                "优化睡眠环境非常关键：尽量让卧室保持安静、昏暗、温度适宜，"
+                "避免在床上长时间刷手机或处理学习/工作任务，让“大脑知道床是用来休息的”，"
+                "从而减少入睡前的大脑过度活跃。"
+            )
+            suggestions.append(
+                "尽量形成相对稳定的作息节奏，例如在固定时间上床和起床，"
+                "白天适度增加光照与活动量，晚间逐步降低节奏，让生物钟重新形成规律，这对改善睡眠质量非常重要。"
+            )
+        if not suggestions:
+            suggestions.append(
+                "当前整体状态相对稳定，可以继续保持规律的作息与适度的运动，"
+                "同时保持对自身情绪与梦境的觉察，一旦发现长时间的情绪低落或睡眠明显变差，及时做出调整或寻求支持。"
+            )
+            suggestions.append(
+                "建议定期给自己安排一些真正愉悦而非“刷手机式放空”的活动，例如户外散步、培养一项兴趣爱好，"
+                "或与信任的人进行高质量的面对面交流，这些都有助于在日常生活中不断补充心理能量。"
+            )
+
+        return {
+            "overall_score": overall_score,
+            "sleep_quality": sleep_quality,
+            "emotion_score": emotion_score,
+            "summary": summary,
+            "emotion_breakdown": emotion_breakdown,
+            "sleep_analysis": sleep_analysis,
+            "suggestions": suggestions[:5],
+        }
+    
+    def _normalize_comprehensive_result(self, result: Dict) -> Dict:
+        """规范化综合分析结果"""
+        # 确保所有必需的字段存在
+        normalized = {
+            "overall_score": max(0, min(100, int(result.get("overall_score", 50)))),
+            "sleep_quality": max(0, min(100, int(result.get("sleep_quality", 50)))),
+            "emotion_score": max(0, min(100, int(result.get("emotion_score", 50)))),
+            "summary": result.get("summary", "综合分析完成"),
+            "emotion_breakdown": result.get("emotion_breakdown", {}),
+            "sleep_analysis": result.get("sleep_analysis", "睡眠质量评估完成"),
+            "suggestions": result.get("suggestions", [])
+        }
+        
+        # 确保建议是列表
+        if not isinstance(normalized["suggestions"], list):
+            normalized["suggestions"] = []
+        
+        # 限制建议数量
+        normalized["suggestions"] = normalized["suggestions"][:5]
+        
+        return normalized
 
 def main():
     """主函数，支持命令行参数传入梦境文本"""

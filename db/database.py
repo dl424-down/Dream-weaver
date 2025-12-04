@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import threading
+from datetime import datetime
 from typing import Dict, Optional
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -56,6 +57,15 @@ def save_dream_entry(
     if not suggestion_text and text_analysis:
         suggestion_text = text_analysis.get("analysis")
 
+    # 使用中国时区（UTC+8）的本地时间
+    from datetime import timezone, timedelta
+    # 明确使用 UTC+8 时区
+    china_tz = timezone(timedelta(hours=8))
+    # 获取 UTC 时间并转换为中国时区
+    utc_now = datetime.now(timezone.utc)
+    china_now = utc_now.astimezone(china_tz)
+    current_time = china_now.strftime("%Y-%m-%d %H:%M:%S")
+
     with _lock:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.execute(
@@ -67,8 +77,9 @@ def save_dream_entry(
                     visualization_prompt,
                     image_caption,
                     image_path,
-                    suggestions
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    suggestions,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     dream_text,
@@ -78,13 +89,29 @@ def save_dream_entry(
                     image_caption,
                     image_path,
                     suggestion_text,
+                    current_time,
                 ),
             )
             conn.commit()
             entry_id = cursor.lastrowid
-            print(f"[数据库] 梦境记录已保存 (ID: {entry_id}, 文本长度: {len(dream_text)}字符)")
+            print(f"[数据库] 梦境记录已保存 (ID: {entry_id}, 文本长度: {len(dream_text)}字符, 时间: {current_time})")
             return entry_id
 
+
+def update_image_path(entry_id: int, image_path: str) -> None:
+    """更新指定梦境记录的图片路径"""
+    with _lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                """
+                UPDATE dream_entries
+                SET image_path = ?
+                WHERE id = ?
+                """,
+                (image_path, entry_id),
+            )
+            conn.commit()
+            print(f"[数据库] 已更新梦境记录 {entry_id} 的图片路径为: {image_path}")
 
 def get_recent_entries(limit: int = 20):
     """（可选）获取最近的梦境记录，便于调试"""
@@ -92,12 +119,45 @@ def get_recent_entries(limit: int = 20):
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
             """
-            SELECT id, dream_text, combined_analysis, created_at
+            SELECT id, dream_text, combined_analysis, created_at, image_path, text_analysis_json, visualization_prompt
             FROM dream_entries
             ORDER BY created_at DESC
             LIMIT ?
             """,
             (limit,),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            entry = dict(row)
+            # 解析JSON字段
+            if entry.get('text_analysis_json'):
+                try:
+                    entry['text_analysis'] = json.loads(entry['text_analysis_json'])
+                except:
+                    entry['text_analysis'] = {}
+            result.append(entry)
+        return result
+
+def get_dream_entry_by_id(entry_id: int):
+    """根据ID获取单条梦境记录的完整信息"""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            """
+            SELECT * FROM dream_entries WHERE id = ?
+            """,
+            (entry_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            entry = dict(row)
+            # 解析JSON字段
+            if entry.get('text_analysis_json'):
+                try:
+                    entry['text_analysis'] = json.loads(entry['text_analysis_json'])
+                except:
+                    entry['text_analysis'] = {}
+            return entry
+        return None
 

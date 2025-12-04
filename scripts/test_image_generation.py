@@ -3,11 +3,17 @@ import os
 import requests
 import dashscope
 from dashscope import ImageSynthesis
+from dotenv import load_dotenv
 
-# ✅ 设置 DashScope API Key（两种方式都写上最保险）
-API_KEY = "sk-1bb88c7976254a628f3fa470a25b83c0"
-os.environ["DASHSCOPE_API_KEY"] = API_KEY
-dashscope.api_key = API_KEY   # ← 必须加这一行！！！
+# 从 .env 文件加载环境变量（与后端保持一致）
+ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+load_dotenv(ENV_PATH)
+
+API_KEY = os.environ.get("DASHSCOPE_API_KEY")
+if not API_KEY:
+    raise RuntimeError("DASHSCOPE_API_KEY 未配置，请在项目根目录 .env 中设置该环境变量")
+
+dashscope.api_key = API_KEY   # 从环境变量设置 API Key
 
 def generate_dream_image():
     prompt = (

@@ -12,6 +12,17 @@ const result = ref(null)
 const generatedImage = ref(null)
 const error = ref('')
 const canvasRef = ref(null) // 3D 画布引用
+const historyVisible = ref(false)
+const historyLoading = ref(false)
+const historyEntries = ref([])
+const selectedEntry = ref(null)
+const detailLoading = ref(false)
+const sidebarCollapsed = ref(false)
+const deletedEntryIds = ref(new Set()) // 存储被删除的记录ID（仅前端）
+const selectedEntryIds = ref(new Set()) // 存储选中的记录ID（用于综合分析）
+const comprehensiveAnalysis = ref(null) // 综合分析结果
+const analyzing = ref(false) // 是否正在分析
+const lastEntryId = ref(null) // 最近一次分析生成的记录ID，用于绑定生成的图片
 
 const fileName = computed(() => imageFile.value ? imageFile.value.name : '')
 
@@ -40,6 +51,7 @@ async function analyze() {
     const resp = await fetch('http://localhost:8000/analyze', { method: 'POST', body: form })
     if (!resp.ok) throw new Error('星链连接失败')
     result.value = await resp.json()
+    lastEntryId.value = result.value?.entry_id || null
     scrollTo('result-section')
   } catch (e) {
     error.value = e.message || String(e)
@@ -60,6 +72,7 @@ async function analyzeTextOnly() {
     const resp = await fetch('http://localhost:8000/analyze', { method: 'POST', body: form })
     if (!resp.ok) throw new Error('星链连接失败')
     result.value = await resp.json()
+    lastEntryId.value = result.value?.entry_id || null
     scrollTo('result-section')
   } catch (e) {
     error.value = e.message || String(e)
@@ -76,6 +89,9 @@ async function generateImage() {
   
   const form = new FormData()
   form.append('dream_text', dreamText.value)
+  if (lastEntryId.value) {
+    form.append('entry_id', String(lastEntryId.value))
+  }
   
   try {
     const resp = await fetch('http://localhost:8000/generate-image', { method: 'POST', body: form })
@@ -83,6 +99,10 @@ async function generateImage() {
     const j = await resp.json()
     if (j && j.image) {
       generatedImage.value = j.image
+      // 如果后端返回了 entry_id，则更新 lastEntryId（防止前端状态不同步）
+      if (j.entry_id) {
+        lastEntryId.value = j.entry_id
+      }
       scrollTo('image-section')
     } else {
       throw new Error(j?.message || '虚空未返回图像')
@@ -112,6 +132,173 @@ function checkEmpty() {
 function resetState() {
   error.value = ''
   result.value = null
+  lastEntryId.value = null
+}
+
+async function loadHistory() {
+  historyLoading.value = true
+  historyVisible.value = true
+  selectedEntry.value = null
+  try {
+    const resp = await fetch('http://localhost:8000/dreams/history?limit=20')
+    if (!resp.ok) throw new Error('获取历史记录失败')
+    const data = await resp.json()
+    if (data.success) {
+      historyEntries.value = data.entries || []
+    } else {
+      error.value = data.error || '获取历史记录失败'
+    }
+  } catch (e) {
+    error.value = e.message || String(e)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function loadEntryDetail(entryId) {
+  detailLoading.value = true
+  try {
+    const resp = await fetch(`http://localhost:8000/dreams/${entryId}`)
+    if (!resp.ok) throw new Error('获取详情失败')
+    const data = await resp.json()
+    if (data.success) {
+      selectedEntry.value = data.entry
+    } else {
+      error.value = data.error || '获取详情失败'
+    }
+  } catch (e) {
+    error.value = e.message || String(e)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function toggleSidebar() {
+  historyVisible.value = !historyVisible.value
+  if (!historyVisible.value) {
+    selectedEntry.value = null
+  } else if (historyEntries.value.length === 0) {
+    loadHistory()
+  }
+}
+
+function toggleSidebarCollapse() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+function closeHistory() {
+  historyVisible.value = false
+  selectedEntry.value = null
+}
+
+function deleteEntry(entryId, event) {
+  // 阻止事件冒泡，避免触发点击查看详情
+  if (event) {
+    event.stopPropagation()
+  }
+  
+  // 弹出确认对话框
+  if (confirm('您确认删除吗？\n（注意：此操作仅在前端删除，数据库中的数据不会被删除）')) {
+    // 添加到删除列表（仅前端）
+    deletedEntryIds.value.add(entryId)
+    // 如果当前查看的是被删除的记录，关闭详情
+    if (selectedEntry.value && selectedEntry.value.id === entryId) {
+      selectedEntry.value = null
+    }
+  }
+}
+
+// 计算过滤后的历史记录（排除已删除的）
+const filteredHistoryEntries = computed(() => {
+  return historyEntries.value.filter(entry => !deletedEntryIds.value.has(entry.id))
+})
+
+function toggleEntrySelection(entryId, event) {
+  // 阻止事件冒泡，避免触发点击查看详情
+  if (event) {
+    event.stopPropagation()
+  }
+  if (selectedEntryIds.value.has(entryId)) {
+    selectedEntryIds.value.delete(entryId)
+  } else {
+    selectedEntryIds.value.add(entryId)
+  }
+}
+
+async function analyzeComprehensive() {
+  if (selectedEntryIds.value.size === 0) {
+    alert('请至少选择一个梦境记录进行分析')
+    return
+  }
+  
+  analyzing.value = true
+  comprehensiveAnalysis.value = null
+  
+  try {
+    const entryIds = Array.from(selectedEntryIds.value)
+    const resp = await fetch('http://localhost:8000/dreams/comprehensive-analysis', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ entry_ids: entryIds })
+    })
+    
+    if (!resp.ok) throw new Error('综合分析失败')
+    const data = await resp.json()
+    if (data.success) {
+      comprehensiveAnalysis.value = data.analysis
+      selectedEntry.value = null // 关闭详情面板
+      scrollTo('comprehensive-section')
+    } else {
+      error.value = data.error || '综合分析失败'
+    }
+  } catch (e) {
+    error.value = e.message || String(e)
+  } finally {
+    analyzing.value = false
+  }
+}
+
+function clearSelection() {
+  selectedEntryIds.value.clear()
+  comprehensiveAnalysis.value = null
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '未知时间'
+  try {
+    // 数据库存储的是中国本地时间 "YYYY-MM-DD HH:MM:SS"
+    // 直接格式化显示，不需要时区转换
+    if (dateString.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+      // 格式化为 "YYYY/MM/DD HH:MM"
+      const [datePart, timePart] = dateString.split(' ')
+      const [year, month, day] = datePart.split('-')
+      const [hour, minute] = timePart.split(':')
+      return `${year}/${month}/${day} ${hour}:${minute}`
+    } else if (dateString.includes('T')) {
+      // ISO 格式，解析后显示
+      const date = new Date(dateString)
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        })
+      }
+    }
+    // 其他格式，尝试直接显示
+    return dateString.substring(0, 16).replace('T', ' ')
+  } catch {
+    // 如果解析失败，直接显示原始字符串（去掉秒数）
+    if (dateString && dateString.length >= 16) {
+      return dateString.substring(0, 16).replace('T', ' ')
+    }
+    return dateString
+  }
 }
 
 // --- Three.js 3D 场景逻辑 ---
@@ -279,7 +466,173 @@ function animate() {
   <canvas ref="canvasRef" class="webgl-bg"></canvas>
 
   <div class="dream-universe-ui">
-    <div class="content-wrapper">
+    <!-- 侧边栏 -->
+    <div class="sidebar-container" :class="{ 'collapsed': sidebarCollapsed, 'visible': historyVisible }">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <button class="sidebar-toggle" @click="toggleSidebarCollapse" v-if="historyVisible">
+            <span v-if="!sidebarCollapsed">☰</span>
+            <span v-else>☰</span>
+          </button>
+          <h3 v-if="!sidebarCollapsed || !historyVisible">往期回忆</h3>
+          <button class="new-chat-btn" @click="toggleSidebar" v-if="!sidebarCollapsed || !historyVisible">
+            {{ historyVisible ? '关闭' : '打开' }}
+          </button>
+        </div>
+
+        <div v-if="historyVisible && !sidebarCollapsed" class="sidebar-content">
+          <!-- 综合分析控制栏 -->
+          <div v-if="filteredHistoryEntries.length > 0" class="comprehensive-controls">
+            <div class="selection-info">
+              <span>已选择 {{ selectedEntryIds.size }} 条记录</span>
+            </div>
+            <div class="control-buttons">
+              <button 
+                class="analyze-btn" 
+                :disabled="selectedEntryIds.size === 0 || analyzing"
+                @click="analyzeComprehensive"
+              >
+                {{ analyzing ? '分析中...' : '综合分析' }}
+              </button>
+              <button 
+                class="clear-btn" 
+                :disabled="selectedEntryIds.size === 0"
+                @click="clearSelection"
+              >
+                清空
+              </button>
+            </div>
+          </div>
+
+          <div v-if="historyLoading" class="loading-state-3d">
+            <div class="cube-loader">
+              <div class="cube-face front"></div><div class="cube-face back"></div>
+              <div class="cube-face right"></div><div class="cube-face left"></div>
+              <div class="cube-face top"></div><div class="cube-face bottom"></div>
+            </div>
+            <p class="loading-text-glitch">正在检索记忆库...</p>
+          </div>
+
+          <div v-else-if="historyEntries.length === 0" class="empty-history">
+            <p>记忆库中暂无记录</p>
+          </div>
+
+          <div v-else class="history-list-sidebar">
+            <div 
+              v-for="entry in filteredHistoryEntries" 
+              :key="entry.id" 
+              class="history-item-sidebar"
+              :class="{ 'active': selectedEntry && selectedEntry.id === entry.id }"
+              @click="loadEntryDetail(entry.id)"
+            >
+              <div class="history-item-preview">
+                <div class="preview-header">
+                  <input 
+                    type="checkbox" 
+                    class="entry-checkbox"
+                    :checked="selectedEntryIds.has(entry.id)"
+                    @click.stop="toggleEntrySelection(entry.id, $event)"
+                    @change="() => {}"
+                  />
+                  <span class="history-id">#{{ entry.id }}</span>
+                  <span class="history-date-small">{{ formatDate(entry.created_at) }}</span>
+                  <button 
+                    class="delete-btn" 
+                    @click.stop="deleteEntry(entry.id, $event)"
+                    title="删除（仅前端）"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p class="preview-text">{{ entry.preview }}</p>
+                <div class="preview-tags">
+                  <span v-if="entry.has_analysis" class="tag tag-analysis">分析</span>
+                  <span v-if="entry.has_image" class="tag tag-image">图片</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="main-content" :class="{ 'sidebar-open': historyVisible && !sidebarCollapsed }">
+      <!-- 详情内容显示在主内容区域 -->
+      <Transition name="fade">
+        <div v-if="selectedEntry" class="detail-content-main">
+          <div class="detail-header-main">
+            <h2>回忆详情 #{{ selectedEntry.id }}</h2>
+            <button class="close-btn" @click="selectedEntry = null">×</button>
+          </div>
+
+          <div v-if="detailLoading" class="loading-state-3d">
+            <div class="cube-loader">
+              <div class="cube-face front"></div><div class="cube-face back"></div>
+              <div class="cube-face right"></div><div class="cube-face left"></div>
+              <div class="cube-face top"></div><div class="cube-face bottom"></div>
+            </div>
+            <p class="loading-text-glitch">正在加载详情...</p>
+          </div>
+
+          <div v-else class="detail-content-inner">
+            <!-- 1. 梦境描述 -->
+            <div class="detail-section">
+              <h4>梦境描述</h4>
+              <p>{{ selectedEntry.dream_text }}</p>
+            </div>
+
+            <!-- 2. 文本分析（情绪 / 主题 / 关键词） -->
+            <div v-if="selectedEntry.text_analysis" class="detail-section">
+              <h4>文本分析</h4>
+              <div class="analysis-grid">
+                <div v-if="selectedEntry.text_analysis.emotions" class="analysis-item">
+                  <span class="analysis-label">情绪</span>
+                  <span class="analysis-value">{{ (selectedEntry.text_analysis.emotions || []).join(' / ') }}</span>
+                </div>
+                <div v-if="selectedEntry.text_analysis.themes" class="analysis-item">
+                  <span class="analysis-label">主题</span>
+                  <span class="analysis-value">{{ (selectedEntry.text_analysis.themes || []).join(' / ') }}</span>
+                </div>
+                <div v-if="selectedEntry.text_analysis.keywords" class="analysis-item">
+                  <span class="analysis-label">关键词</span>
+                  <span class="analysis-value">{{ (selectedEntry.text_analysis.keywords || []).join(' · ') }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. 心理分析 -->
+            <div v-if="selectedEntry.combined_analysis" class="detail-section">
+              <h4>心理分析</h4>
+              <p>{{ selectedEntry.combined_analysis }}</p>
+            </div>
+
+            <!-- 4. 视觉化建议 -->
+            <div v-if="selectedEntry.visualization_prompt" class="detail-section">
+              <h4>视觉化建议</h4>
+              <p class="prompt-text">{{ selectedEntry.visualization_prompt }}</p>
+            </div>
+
+            <!-- 5. 生成的图片（放在最后，沿用主界面的倾斜样式） -->
+            <div v-if="selectedEntry.image_url" class="detail-section detail-image-section">
+              <h4>梦境重现</h4>
+              <div class="image-portal-3d">
+                <div class="image-wrapper-tilt">
+                  <img :src="selectedEntry.image_url" alt="梦境图片" class="dream-result-img" />
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-footer">
+              <span class="detail-date">记录时间：{{ formatDate(selectedEntry.created_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- 如果没有选择详情，显示主界面 -->
+      <Transition name="fade">
+        <div v-if="!selectedEntry" class="content-wrapper">
       
       <header class="dream-header">
         <h1 class="glitch-title" data-text="DREAM WEAVER">DREAM WEAVER</h1>
@@ -292,7 +645,7 @@ function animate() {
 
       <div class="crystal-capsule input-enter">
         <div class="inner-content">
-          <label class="holo-label">输入梦境信号</label>
+          <label class="holo-label" >输入梦境内容</label>
           
           <div class="input-field-wrap">
             <textarea 
@@ -333,6 +686,10 @@ function animate() {
                 <span class="btn-text">
                   {{ loadingImage ? '物质构筑中...' : '具象化梦境' }}
                 </span>
+              </button>
+
+              <button class="cyber-btn history" @click="toggleSidebar">
+                <span class="btn-text">查找往期回忆</span>
               </button>
             </div>
           </div>
@@ -401,6 +758,81 @@ function animate() {
         </div>
       </Transition>
 
+      <!-- 综合分析结果 -->
+      <Transition name="hologram-reveal">
+        <div v-if="comprehensiveAnalysis" id="comprehensive-section" class="comprehensive-deck glass-panel-3d">
+          <div class="deck-header">
+            <h3>综合分析报告</h3>
+            <div class="scanner-line-anim"></div>
+            <button class="close-btn" @click="comprehensiveAnalysis = null">×</button>
+          </div>
+
+          <div class="comprehensive-content">
+            <!-- 状态评分卡片 -->
+            <div class="score-cards">
+              <div class="score-card overall">
+                <div class="score-label">综合状态</div>
+                <div class="score-value">{{ comprehensiveAnalysis.overall_score }}/100</div>
+                <div class="score-bar">
+                  <div class="score-fill" :style="{ width: comprehensiveAnalysis.overall_score + '%' }"></div>
+                </div>
+              </div>
+              <div class="score-card sleep">
+                <div class="score-label">睡眠质量</div>
+                <div class="score-value">{{ comprehensiveAnalysis.sleep_quality }}/100</div>
+                <div class="score-bar">
+                  <div class="score-fill sleep-fill" :style="{ width: comprehensiveAnalysis.sleep_quality + '%' }"></div>
+                </div>
+              </div>
+              <div class="score-card emotion">
+                <div class="score-label">情绪状态</div>
+                <div class="score-value">{{ comprehensiveAnalysis.emotion_score }}/100</div>
+                <div class="score-bar">
+                  <div class="score-fill emotion-fill" :style="{ width: comprehensiveAnalysis.emotion_score + '%' }"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 详细分析 -->
+            <div class="analysis-sections">
+              <div class="analysis-section">
+                <h4>状态总结</h4>
+                <p>{{ comprehensiveAnalysis.summary }}</p>
+              </div>
+
+              <div class="analysis-section">
+                <h4>情绪分析</h4>
+                <div class="emotion-tags">
+                  <span 
+                    v-for="(score, emotion) in comprehensiveAnalysis.emotion_breakdown" 
+                    :key="emotion"
+                    class="emotion-tag"
+                    :style="{ opacity: Math.max(0.3, score / 100) }"
+                  >
+                    {{ emotion }} ({{ score }}%)
+                  </span>
+                </div>
+              </div>
+
+              <div class="analysis-section">
+                <h4>睡眠质量评估</h4>
+                <p>{{ comprehensiveAnalysis.sleep_analysis }}</p>
+              </div>
+
+              <div class="analysis-section">
+                <h4>建议与提醒</h4>
+                <ul class="suggestions-list">
+                  <li v-for="(suggestion, index) in comprehensiveAnalysis.suggestions" :key="index">
+                    {{ suggestion }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -430,8 +862,9 @@ function animate() {
   font-family: 'Rajdhani', sans-serif;
   position: relative;
   z-index: 10;
-  padding-bottom: 100px;
+  display: flex;
   perspective: 1000px;
+  width: 100%;
 }
 
 .content-wrapper {
@@ -488,7 +921,7 @@ function animate() {
   text-shadow: 0 0 8px var(--neon-cyan);
 }
 
-.input-field-wrap { position: relative; margin-bottom: 30px; transform-style: preserve-3d;}
+.input-field-wrap { position: relative; margin-top:20px;margin-bottom: 30px; transform-style: preserve-3d;}
 
 .hologram-input {
   width: 100%;
@@ -554,6 +987,9 @@ function animate() {
 .cyber-btn.magic:hover { background: rgba(236, 72, 153, 0.2); box-shadow: 0 0 40px rgba(236, 72, 153, 0.6); }
 
 .cyber-btn.secondary:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
+
+.cyber-btn.history { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
+.cyber-btn.history:hover { background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); }
 
 .cyber-btn.small { padding: 10px 20px; font-size: 0.8rem; clip-path: none; border-radius: 50px; border-color: #64748b;}
 .cyber-btn.small.active { border-color: var(--neon-cyan); background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 20px rgba(6, 182, 212, 0.4); }
@@ -666,11 +1102,746 @@ function animate() {
 .hologram-reveal-leave-active { transition: all 0.3s ease; }
 .hologram-reveal-enter-from { opacity: 0; transform: translateY(50px) translateZ(-50px) rotateX(-10deg); }
 
+/* 侧边栏容器 */
+.sidebar-container {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 260px;
+  background: rgba(32, 33, 35, 0.95);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255,255,255,0.1);
+  z-index: 1000;
+  transition: width 0.3s ease, transform 0.3s ease;
+  transform: translateX(-100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-container.visible {
+  transform: translateX(0);
+}
+
+.sidebar-container.collapsed {
+  width: 60px;
+}
+
+.sidebar-container.collapsed.visible {
+  transform: translateX(0);
+}
+
+/* 侧边栏内容 */
+.sidebar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  gap: 12px;
+  min-height: 60px;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.sidebar-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-container.collapsed .sidebar-header h3,
+.sidebar-container.collapsed .new-chat-btn {
+  display: none;
+}
+
+.new-chat-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.new-chat-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: 0; /* 关键：让flex子元素正确计算高度 */
+}
+
+.sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-header h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.2rem;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.close-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.3s;
+  flex-shrink: 0;
+}
+
+.close-btn:hover {
+  background: rgba(236, 72, 153, 0.3);
+  border-color: var(--neon-pink);
+  transform: rotate(90deg);
+}
+
+.empty-history {
+  text-align: center;
+  padding: 60px 20px;
+  color: #8e8ea0;
+  font-size: 13px;
+}
+
+.history-list-sidebar {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  min-height: 0;
+}
+
+.history-item-sidebar {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.history-item-sidebar:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.history-item-sidebar.active {
+  background: rgba(168, 85, 247, 0.2);
+}
+
+.history-item-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.history-id {
+  color: #8e8ea0;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.history-date-small {
+  color: #8e8ea0;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-text {
+  color: #ececf1;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.preview-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.tag-analysis {
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--neon-purple);
+}
+
+.tag-image {
+  background: rgba(236, 72, 153, 0.15);
+  color: var(--neon-pink);
+}
+
+.delete-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.history-item-sidebar:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  transform: scale(1.1);
+}
+
+.delete-btn {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.history-item-sidebar:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  transform: scale(1.1);
+}
+
+/* 主内容区域 */
+.main-content {
+  flex: 1;
+  margin-left: 0;
+  transition: margin-left 0.3s ease;
+  min-height: 100vh;
+  overflow-y: auto;
+  width: 100%;
+  position: relative;
+}
+
+.main-content.sidebar-open {
+  margin-left: 260px;
+  width: calc(100% - 260px);
+}
+
+.sidebar-container.collapsed + .main-content.sidebar-open {
+  margin-left: 60px;
+  width: calc(100% - 60px);
+}
+
+/* 详情内容在主内容区域 */
+.detail-content-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.detail-header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.detail-header-main h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.8rem;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 0 10px var(--neon-purple);
+}
+
+.detail-content-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.detail-header h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.2rem;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 0 10px var(--neon-purple);
+}
+
+.detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.detail-section {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px dashed rgba(255,255,255,0.1);
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.detail-section h4 {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--neon-cyan);
+  font-size: 1rem;
+  margin: 0 0 15px 0;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px var(--neon-cyan);
+}
+
+.detail-section p {
+  color: #e2e8f0;
+  line-height: 1.8;
+  margin: 0;
+  text-align: justify;
+}
+
+.analysis-grid {
+  display: grid;
+  gap: 15px;
+}
+
+.analysis-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  background: rgba(0,0,0,0.3);
+  border-left: 3px solid var(--neon-purple);
+  border-radius: 8px;
+}
+
+.analysis-label {
+  font-family: 'Orbitron', sans-serif;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
+
+.analysis-value {
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.prompt-text {
+  font-family: 'Courier New', monospace;
+  color: #a5f3fc;
+  background: rgba(6, 182, 212, 0.05);
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 3px solid var(--neon-cyan);
+}
+
+.detail-image-section {
+  border-bottom: 2px solid rgba(168, 85, 247, 0.3);
+  padding-bottom: 25px;
+  margin-bottom: 25px;
+}
+
+.detail-image-section h4 {
+  color: var(--neon-pink);
+  text-shadow: 0 0 10px var(--neon-pink);
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+}
+
+.detail-image-wrapper {
+  margin-top: 15px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(168, 85, 247, 0.3);
+  box-shadow: 0 10px 40px rgba(168, 85, 247, 0.4), 0 0 30px rgba(236, 72, 153, 0.3);
+  transition: 0.3s;
+}
+
+.detail-image-wrapper:hover {
+  border-color: var(--neon-pink);
+  box-shadow: 0 15px 50px rgba(168, 85, 247, 0.6), 0 0 40px rgba(236, 72, 153, 0.5);
+  transform: scale(1.02);
+}
+
+.detail-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: 0.3s;
+}
+
+.detail-footer {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+}
+
+.detail-date {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+/* 动画 */
+.slide-sidebar-enter-active,
+.slide-sidebar-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-sidebar-enter-from {
+  transform: translateX(-100%);
+}
+
+.slide-sidebar-leave-to {
+  transform: translateX(-100%);
+}
+
+.slide-detail-enter-active,
+.slide-detail-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-detail-enter-from {
+  transform: translateX(100%);
+}
+
+.slide-detail-leave-to {
+  transform: translateX(100%);
+}
+
 @media (max-width: 768px) {
   .glitch-title { font-size: 2.8rem; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .control-deck, .action-module { flex-direction: column; align-items: stretch; }
   .cyber-btn { width: 100%; }
+  .dream-universe-ui.sidebar-open,
+  .dream-universe-ui.detail-open,
+  .dream-universe-ui.sidebar-open.detail-open { 
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .history-sidebar { width: 100%; }
+  .detail-panel { width: 100%; }
+  .score-cards { grid-template-columns: 1fr; }
+}
+
+.entry-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--neon-purple);
+  flex-shrink: 0;
+}
+
+.comprehensive-controls {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.2);
+  flex-shrink: 0;
+}
+
+.selection-info {
+  color: #8e8ea0;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.analyze-btn,
+.clear-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.analyze-btn {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--neon-purple);
+}
+
+.analyze-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.3);
+  transform: translateY(-1px);
+}
+
+.analyze-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clear-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.1);
+}
+
+.clear-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comprehensive-deck {
+  margin-top: 40px;
+}
+
+.comprehensive-content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.score-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.score-card {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.score-card.overall {
+  border-left: 3px solid var(--neon-purple);
+}
+
+.score-card.sleep {
+  border-left: 3px solid var(--neon-cyan);
+}
+
+.score-card.emotion {
+  border-left: 3px solid var(--neon-pink);
+}
+
+.score-label {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.score-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 15px;
+}
+
+.score-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan));
+  transition: width 1s ease;
+}
+
+.sleep-fill {
+  background: linear-gradient(90deg, var(--neon-cyan), #06b6d4);
+}
+
+.emotion-fill {
+  background: linear-gradient(90deg, var(--neon-pink), #ec4899);
+}
+
+.analysis-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.analysis-section {
+  background: rgba(0,0,0,0.3);
+  border-left: 3px solid var(--neon-cyan);
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.analysis-section h4 {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--neon-cyan);
+  font-size: 1rem;
+  margin: 0 0 15px 0;
+  letter-spacing: 1px;
+}
+
+.analysis-section p {
+  color: #e2e8f0;
+  line-height: 1.8;
+  margin: 0;
+}
+
+.emotion-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.emotion-tag {
+  padding: 6px 12px;
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid var(--neon-purple);
+  border-radius: 16px;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.suggestions-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #e2e8f0;
+  line-height: 1.8;
+}
+
+.suggestions-list li {
+  margin-bottom: 8px;
 }
 </style>
 
