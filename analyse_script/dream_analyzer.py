@@ -207,18 +207,42 @@ class DreamAnalyzer:
             print(f"图像预处理失败: {e}")
             return None, None
     
-    def analyze_dream_with_qwen(self, dream_text: str) -> Optional[Dict]:
+    def translate_image_caption(self, english_caption: str) -> str:
+        """
+        将英文图片描述翻译成中文
+        Args:
+            english_caption: 英文图片描述
+        Returns:
+            中文图片描述
+        """
+        if not self.use_qwen or not self.llm:
+            # 如果没有LLM，返回原始英文（或简单处理）
+            return english_caption
+        
+        try:
+            prompt = f"请将以下英文图片描述翻译成中文，保持简洁自然：\n{english_caption}\n\n只返回中文翻译，不要其他说明。"
+            translation = self.llm.call(prompt, max_tokens=200)
+            if translation:
+                return translation.strip()
+        except Exception as e:
+            print(f"翻译图片描述失败: {e}")
+        
+        # 翻译失败，返回原始英文
+        return english_caption
+    
+    def analyze_dream_with_qwen(self, dream_text: str, image_caption_cn: Optional[str] = None) -> Optional[Dict]:
         """
         使用DashScope LLM分析梦境（优先使用）
         Args:
             dream_text: 梦境文本描述
+            image_caption_cn: 图片的中文描述（可选）
         Returns:
             分析结果字典，失败返回None
         """
         if not self.use_qwen or not self.llm:
             return None
         
-        system_prompt = """你是一个专业的梦境心理分析师。请分析用户提供的梦境描述，识别其中的情绪、主题和关键词。
+        system_prompt = """你是一个专业的梦境心理分析师。请综合分析用户提供的梦境描述和图片信息，识别其中的情绪、主题和关键词。
 请以JSON格式返回结果，格式如下：
 {
     "emotions": ["情绪1", "情绪2", "情绪3"],
@@ -230,9 +254,22 @@ class DreamAnalyzer:
 主题可选值：飞行、追逐、水、动物、人物、场所、考试
 关键词：提取梦境中的关键名词和重要概念，最多10个
 
+如果提供了图片信息，请同时考虑文本描述和图片内容，进行融合分析。
 只返回JSON，不要其他文字。"""
         
-        prompt = f"请分析以下梦境描述：\n{dream_text}\n\n请返回JSON格式的分析结果。"
+        if image_caption_cn:
+            prompt = f"""请综合分析以下梦境：
+
+文本描述：{dream_text}
+图片显示：{image_caption_cn}
+
+请同时考虑文本描述和图片内容，识别融合的情绪、主题和关键词。
+如果图片和文本都显示相同的情绪或主题，可以增强该情绪/主题的权重。
+如果图片和文本有差异，请综合考虑两者，给出更全面的分析。
+
+请返回JSON格式的分析结果。"""
+        else:
+            prompt = f"请分析以下梦境描述：\n{dream_text}\n\n请返回JSON格式的分析结果。"
         
         response = self.llm.call(prompt, system_prompt=system_prompt, max_tokens=500)
         if not response:
@@ -251,13 +288,21 @@ class DreamAnalyzer:
         
         return None
     
-    def generate_detailed_analysis(self, dream_text: str, emotions: List[str], themes: List[str]) -> str:
+    def generate_detailed_analysis(
+        self, 
+        dream_text: str, 
+        emotions: List[str], 
+        themes: List[str],
+        image_caption_cn: Optional[str] = None
+    ) -> str:
         """
         生成详细的心理分析（使用LLM生成几百字的详细分析）
+        如果提供了图片信息，会融合到分析中
         Args:
             dream_text: 梦境文本描述
             emotions: 识别出的情绪列表
             themes: 识别出的主题列表
+            image_caption_cn: 图片的中文描述（可选）
         Returns:
             详细的心理分析文本（200-400字）
         """
@@ -276,7 +321,8 @@ class DreamAnalyzer:
             return psychological_meanings.get(primary_emotion, '需要进一步分析')
         
         system_prompt = """你是一个资深的梦境心理分析师，擅长从心理学、精神分析学和象征主义的角度解读梦境。
-请提供专业、深入、详细的心理分析，字数控制在200-400字之间。"""
+请提供专业、深入、详细的心理分析，字数控制在200-400字之间。
+如果提供了图片信息，请综合分析文本和图片，让分析更加全面和深入。"""
         
         emotions_str = '、'.join(emotions) if emotions else '未明确'
         themes_str = '、'.join(themes) if themes else '未明确'
@@ -286,7 +332,20 @@ class DreamAnalyzer:
 梦境描述：{dream_text}
 
 识别出的主要情绪：{emotions_str}
-识别出的主题：{themes_str}
+识别出的主题：{themes_str}"""
+        
+        if image_caption_cn:
+            prompt += f"""
+
+相关图片显示：{image_caption_cn}
+
+请综合分析文本描述和图片内容，注意：
+- 如果图片和文本都显示相同的情绪或主题，可以增强该情绪/主题的分析
+- 如果图片和文本有差异，可以探讨这种差异的心理学意义
+- 图片中的视觉元素可能提供额外的象征意义和深层信息
+- 请将图片信息自然地融入到分析中，而不是简单地提及"""
+        
+        prompt += """
 
 请从以下角度进行分析：
 1. 情绪层面的心理意义（这些情绪反映了什么心理状态）
@@ -313,14 +372,23 @@ class DreamAnalyzer:
         }
         return psychological_meanings.get(primary_emotion, '需要进一步分析')
     
-    def generate_visualization_prompt(self, dream_text: str, emotions: List[str], themes: List[str], keywords: List[str]) -> str:
+    def generate_visualization_prompt(
+        self, 
+        dream_text: str, 
+        emotions: List[str], 
+        themes: List[str], 
+        keywords: List[str],
+        image_caption_cn: Optional[str] = None
+    ) -> str:
         """
         生成详细的视觉化提示词（使用LLM生成100-200字的详细提示词）
+        如果提供了图片信息，会融合到提示词生成中
         Args:
             dream_text: 梦境文本描述
             emotions: 识别出的情绪列表
             themes: 识别出的主题列表
             keywords: 提取的关键词列表
+            image_caption_cn: 图片的中文描述（可选）
         Returns:
             详细的视觉化提示词（100-200字）
         """
@@ -331,6 +399,8 @@ class DreamAnalyzer:
                 prompt_parts.append(f"梦境场景包含{', '.join(themes)}")
             if keywords:
                 prompt_parts.append(f"关键元素：{', '.join(keywords[:5])}")
+            if image_caption_cn:
+                prompt_parts.append(f"参考图片：{image_caption_cn}")
             if emotions:
                 emotion_styles = {
                     '快乐': '明亮温暖的色调，阳光灿烂',
@@ -346,7 +416,8 @@ class DreamAnalyzer:
                     prompt_parts.append(emotion_styles[primary_emotion])
             return '，'.join(prompt_parts)
         
-        system_prompt = """你是一名擅长中文叙事的AI视觉提示词专家。请使用中文描述梦境画面，语言应富有画面感与氛围感，便于艺术家或图像模型理解。每条提示保持120~200个汉字，涵盖场景、主体、光影、色彩、构图与情绪。"""
+        system_prompt = """你是一名擅长中文叙事的AI视觉提示词专家。请使用中文描述梦境画面，语言应富有画面感与氛围感，便于艺术家或图像模型理解。每条提示保持120~200个汉字，涵盖场景、主体、光影、色彩、构图与情绪。
+如果提供了参考图片信息，请结合文本描述和图片内容，生成融合的视觉化提示词。"""
         
         emotions_str = '、'.join(emotions) if emotions else '未明确'
         themes_str = '、'.join(themes) if themes else '未明确'
@@ -357,7 +428,19 @@ class DreamAnalyzer:
 梦境描述：{dream_text}
 主要情绪：{emotions_str}
 主题：{themes_str}
-关键词：{keywords_str}
+关键词：{keywords_str}"""
+        
+        if image_caption_cn:
+            prompt += f"""
+
+参考图片显示：{image_caption_cn}
+
+请结合文本描述和参考图片，生成融合的视觉化提示词：
+- 如果图片和文本都包含相同元素，可以增强该元素的描述
+- 如果图片提供了视觉细节（如色彩、构图、氛围），可以融入这些细节
+- 请自然地融合文本和图片信息，生成一个统一的视觉化提示词"""
+        
+        prompt += """
 
 要求：
 1. 使用中文，120~200个汉字
@@ -378,6 +461,8 @@ class DreamAnalyzer:
             prompt_parts.append(f"梦境场景包含{', '.join(themes)}")
         if keywords:
             prompt_parts.append(f"关键元素：{', '.join(keywords[:5])}")
+        if image_caption_cn:
+            prompt_parts.append(f"参考图片：{image_caption_cn}")
         if emotions:
             emotion_styles = {
                 '快乐': '明亮温暖的色调，阳光灿烂',
@@ -444,16 +529,31 @@ class DreamAnalyzer:
         
         return result
     
-    def analyze_dream_text(self, dream_text: str) -> Dict:
+    def analyze_dream_text(self, dream_text: str, image_path: Optional[str] = None) -> Dict:
         """
         分析梦境文本描述（优先使用LLM，失败时回退到关键词匹配）
+        如果提供了图片，会将图片信息融入分析中
         Args:
             dream_text: 梦境文本描述
+            image_path: 相关图像路径（可选）
         Returns:
             分析结果字典
         """
-        # 优先尝试使用LLM分析
-        llm_result = self.analyze_dream_with_qwen(dream_text)
+        # 如果有图片，先获取图片描述并翻译
+        image_caption_cn = None
+        if image_path:
+            try:
+                # 生成英文图片描述
+                image_caption_en = self.generate_image_caption(image_path)
+                if image_caption_en and image_caption_en != "图像描述生成失败":
+                    # 翻译成中文
+                    image_caption_cn = self.translate_image_caption(image_caption_en)
+                    print(f"[图片分析] 图片描述（中文）：{image_caption_cn}")
+            except Exception as e:
+                print(f"[图片分析] 获取图片信息失败: {e}")
+        
+        # 优先尝试使用LLM分析（如果提供了图片，会融合图片信息）
+        llm_result = self.analyze_dream_with_qwen(dream_text, image_caption_cn=image_caption_cn)
         
         if llm_result:
             # LLM分析成功，生成详细的心理分析
@@ -461,8 +561,10 @@ class DreamAnalyzer:
             themes = llm_result.get('themes', [])
             keywords = llm_result.get('keywords', [])
             
-            # 生成详细的心理分析（几百字）
-            detailed_analysis = self.generate_detailed_analysis(dream_text, emotions, themes)
+            # 生成详细的心理分析（几百字），传入图片信息
+            detailed_analysis = self.generate_detailed_analysis(
+                dream_text, emotions, themes, image_caption_cn=image_caption_cn
+            )
             
             return {
                 'emotions': emotions,
@@ -480,6 +582,10 @@ class DreamAnalyzer:
             analysis_parts.append(f"主要情绪倾向：{', '.join(result['emotions'])}")
         if result['themes']:
             analysis_parts.append(f"梦境主题：{', '.join(result['themes'])}")
+        
+        # 如果有图片信息，也添加到分析中
+        if image_caption_cn:
+            analysis_parts.append(f"相关图片显示：{image_caption_cn}")
         
         # 简单的心理学解释
         primary_emotion = result['emotions'][0] if result['emotions'] else '平静'
@@ -532,39 +638,43 @@ class DreamAnalyzer:
     def analyze_dream(self, dream_text: str, image_path: str = None) -> Dict:
         """
         综合分析梦境
+        如果提供了图片，图片信息会融入到文本分析中，而不是简单拼接
         Args:
             dream_text: 梦境文本描述
             image_path: 相关图像路径（可选）
         Returns:
             完整的分析结果
         """
+        # 在文本分析阶段就传入图片路径，让图片信息融入到分析中
         result = {
-            'text_analysis': self.analyze_dream_text(dream_text),
+            'text_analysis': self.analyze_dream_text(dream_text, image_path=image_path),
             'image_caption': None,
             'combined_analysis': '',
             'visualization_prompt': ''
         }
         
-        # 如果有图像，生成图像描述
+        # 如果有图像，保存图片描述（用于显示，但分析已经融合了）
         if image_path:
-            result['image_caption'] = self.generate_image_caption(image_path)
+            try:
+                image_caption_en = self.generate_image_caption(image_path)
+                if image_caption_en and image_caption_en != "图像描述生成失败":
+                    # 翻译成中文保存
+                    result['image_caption'] = self.translate_image_caption(image_caption_en)
+            except Exception as e:
+                print(f"[图片分析] 获取图片描述失败: {e}")
         
-        # 生成综合分析
+        # 综合分析就是文本分析的结果（已经融合了图片信息）
         text_analysis = result['text_analysis']
-        combined_parts = [text_analysis['analysis']]
+        result['combined_analysis'] = text_analysis['analysis']
         
-        if result['image_caption']:
-            combined_parts.append(f"相关图像显示：{result['image_caption']}")
-        
-        result['combined_analysis'] = ' '.join(combined_parts)
-        
-        # 生成视觉化提示词（使用LLM生成详细提示词）
+        # 生成视觉化提示词（使用LLM生成详细提示词，传入图片信息）
         emotions = text_analysis['emotions']
         themes = text_analysis['themes']
         keywords = text_analysis['keywords']
         
+        # 传入图片信息，让提示词生成也考虑图片
         result['visualization_prompt'] = self.generate_visualization_prompt(
-            dream_text, emotions, themes, keywords
+            dream_text, emotions, themes, keywords, image_caption_cn=result.get('image_caption')
         )
         
         return result

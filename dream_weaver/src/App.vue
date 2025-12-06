@@ -865,6 +865,8 @@ function animate() {
   display: flex;
   perspective: 1000px;
   width: 100%;
+  /* 确保不会影响固定定位的子元素 */
+  overflow: visible;
 }
 
 .content-wrapper {
@@ -1073,7 +1075,12 @@ function animate() {
     border: 1px solid rgba(255,255,255,0.1);
 }
 
-.loading-state-3d { perspective: 800px; text-align: center;}
+.loading-state-3d { 
+  perspective: 800px; 
+  text-align: center;
+  flex-shrink: 0;
+  padding: 40px 20px;
+}
 .cube-loader {
   width: 60px; height: 60px; position: relative; transform-style: preserve-3d;
   animation: spinCube 4s infinite linear; margin: 0 auto 30px;
@@ -1102,7 +1109,7 @@ function animate() {
 .hologram-reveal-leave-active { transition: all 0.3s ease; }
 .hologram-reveal-enter-from { opacity: 0; transform: translateY(50px) translateZ(-50px) rotateX(-10deg); }
 
-/* 侧边栏容器 */
+/* 侧边栏容器 - 固定在视口左侧 */
 .sidebar-container {
   position: fixed;
   left: 0;
@@ -1118,6 +1125,8 @@ function animate() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* 确保侧边栏始终固定在视口，不受页面滚动影响 */
+  will-change: transform;
 }
 
 .sidebar-container.visible {
@@ -1134,11 +1143,13 @@ function animate() {
 
 /* 侧边栏内容 */
 .sidebar {
-  height: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  /* 确保侧边栏高度固定为视口高度 */
+  max-height: 100vh;
 }
 
 .sidebar-header {
@@ -1201,13 +1212,11 @@ function animate() {
 
 .sidebar-content {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   padding: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  height: 0; /* 关键：让flex子元素正确计算高度 */
 }
 
 .sidebar-content::-webkit-scrollbar {
@@ -1271,13 +1280,17 @@ function animate() {
   padding: 60px 20px;
   color: #8e8ea0;
   font-size: 13px;
+  flex-shrink: 0;
 }
 
 .history-list-sidebar {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px;
   min-height: 0;
+  /* 确保列表区域可以独立滚动，不影响侧边栏固定位置 */
+  -webkit-overflow-scrolling: touch;
 }
 
 .history-item-sidebar {
@@ -1429,8 +1442,11 @@ function animate() {
   transition: margin-left 0.3s ease;
   min-height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
   position: relative;
+  /* 确保主内容区域的滚动不影响侧边栏 */
+  z-index: 1;
 }
 
 .main-content.sidebar-open {
