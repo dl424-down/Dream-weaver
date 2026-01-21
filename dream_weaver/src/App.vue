@@ -23,6 +23,11 @@ const selectedEntryIds = ref(new Set()) // 存储选中的记录ID（用于综�
 const comprehensiveAnalysis = ref(null) // 综合分析结果
 const analyzing = ref(false) // 是否正在分析
 const lastEntryId = ref(null) // 最近一次分析生成的记录ID，用于绑定生成的图片
+const generatedVideo = ref(null) // 生成的视频
+const loadingVideo = ref(false) // 是否正在生成视频
+const videoDuration = ref(5) // 视频时长（秒）
+const videoSize = ref('832*480') // 视频分辨率
+const videoSettingsExpanded = ref(false) // 视频参数是否展开
 
 const fileName = computed(() => imageFile.value ? imageFile.value.name : '')
 
@@ -133,6 +138,41 @@ function resetState() {
   error.value = ''
   result.value = null
   lastEntryId.value = null
+}
+
+async function generateVideo() {
+  if (checkEmpty()) return
+  error.value = ''
+  generatedVideo.value = null
+  loadingVideo.value = true
+  
+  const form = new FormData()
+  form.append('dream_text', dreamText.value)
+  form.append('duration', String(videoDuration.value))
+  form.append('size', videoSize.value)
+  if (lastEntryId.value) {
+    form.append('entry_id', String(lastEntryId.value))
+  }
+  
+  try {
+    const resp = await fetch('http://localhost:8000/generate-video', { method: 'POST', body: form })
+    if (!resp.ok) throw new Error('视频生成失败')
+    const j = await resp.json()
+    if (j && j.success && j.video_url) {
+      generatedVideo.value = {
+        url: j.video_url,
+        local_path: j.local_path,
+        message: j.message
+      }
+      scrollTo('video-section')
+    } else {
+      throw new Error(j?.error || '虚空未返回视频')
+    }
+  } catch (e) {
+    error.value = e.message || String(e)
+  } finally {
+    loadingVideo.value = false
+  }
 }
 
 async function loadHistory() {
@@ -688,9 +728,41 @@ function animate() {
                 </span>
               </button>
 
+              <button class="cyber-btn cinema" :disabled="loading || loadingVideo" @click="generateVideo">
+                <span class="btn-bg-anim"></span>
+                <span class="btn-text">
+                  {{ loadingVideo ? '时光编织中...' : '时光投影' }}
+                </span>
+              </button>
+
+              <button class="cyber-btn settings-toggle" @click="videoSettingsExpanded = !videoSettingsExpanded">
+                <span class="btn-text">{{ videoSettingsExpanded ? '▼ 视频参数' : '▶ 视频参数' }}</span>
+              </button>
+
               <button class="cyber-btn history" @click="toggleSidebar">
                 <span class="btn-text">查找往期回忆</span>
               </button>
+            </div>
+
+            <!-- 视频参数设置 -->
+            <div v-if="videoSettingsExpanded" class="video-settings-panel glass-panel-3d">
+              <div class="settings-content">
+                <div class="setting-item">
+                  <label>视频时长</label>
+                  <div class="control-row">
+                    <input v-model.number="videoDuration" type="range" min="1" max="60" class="slider" />
+                    <span class="value-display">{{ videoDuration }} 秒</span>
+                  </div>
+                </div>
+                <div class="setting-item">
+                  <label>视频分辨率</label>
+                  <select v-model="videoSize" class="resolution-select">
+                    <option value="832*480">832×480 (默认)</option>
+                    <option value="1024*576">1024×576 (HD)</option>
+                    <option value="1280*720">1280×720 (720p)</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -753,6 +825,40 @@ function animate() {
             </div>
             <div v-else class="image-wrapper-tilt">
               <img :src="generatedImage" class="dream-result-img" />
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- 视频生成结果 -->
+      <Transition name="hologram-reveal">
+        <div v-if="generatedVideo || loadingVideo" id="video-section" class="cinema-deck glass-panel-3d">
+          <div class="deck-header">
+            <h3>时光投影</h3>
+            <div class="scanner-line-anim"></div>
+          </div>
+          
+          <div class="video-portal-3d">
+            <div v-if="loadingVideo" class="loading-state-3d">
+              <div class="cube-loader">
+                <div class="cube-face front"></div><div class="cube-face back"></div>
+                <div class="cube-face right"></div><div class="cube-face left"></div>
+                <div class="cube-face top"></div><div class="cube-face bottom"></div>
+              </div>
+              <p class="loading-text-glitch">时光编织中，请耐心等待...</p>
+            </div>
+            <div v-else class="video-wrapper">
+              <video 
+                :src="generatedVideo.url" 
+                class="dream-result-video"
+                controls
+                autoplay
+                loop
+                crossorigin="anonymous"
+              ></video>
+              <div class="video-info">
+                <p class="info-text">{{ generatedVideo.message }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -988,6 +1094,9 @@ function animate() {
 .cyber-btn.magic { border-color: var(--neon-pink); box-shadow: 0 0 15px rgba(236, 72, 153, 0.2); }
 .cyber-btn.magic:hover { background: rgba(236, 72, 153, 0.2); box-shadow: 0 0 40px rgba(236, 72, 153, 0.6); }
 
+.cyber-btn.cinema { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
+.cyber-btn.cinema:hover { background: rgba(59, 130, 246, 0.2); box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
+
 .cyber-btn.secondary:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
 
 .cyber-btn.history { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
@@ -995,6 +1104,121 @@ function animate() {
 
 .cyber-btn.small { padding: 10px 20px; font-size: 0.8rem; clip-path: none; border-radius: 50px; border-color: #64748b;}
 .cyber-btn.small.active { border-color: var(--neon-cyan); background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 20px rgba(6, 182, 212, 0.4); }
+
+.cyber-btn.settings-toggle { 
+    padding: 8px 16px; 
+    font-size: 0.85rem;
+    border-color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.1);
+}
+.cyber-btn.settings-toggle:hover {
+    background: rgba(139, 92, 246, 0.2);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+.video-settings-panel {
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 8px;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-item label {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+}
+
+.control-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.slider {
+    flex: 1;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(90deg, rgba(139, 92, 246, 0.3), rgba(139, 92, 246, 0.8));
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
+}
+
+.slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.6);
+    border: none;
+}
+
+.value-display {
+    min-width: 80px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: #8b5cf6;
+    font-weight: 600;
+}
+
+.resolution-select {
+    padding: 10px 12px;
+    background: rgba(30, 27, 75, 0.8);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.resolution-select:hover {
+    border-color: #8b5cf6;
+    background: rgba(30, 27, 75, 0.95);
+}
+
+.resolution-select:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
 
 .glass-panel-3d {
     background: rgba(20, 20, 40, 0.6);
@@ -1073,6 +1297,32 @@ function animate() {
     width: 100%; border-radius: 12px;
     box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 30px rgba(168, 85, 247, 0.3);
     border: 1px solid rgba(255,255,255,0.1);
+}
+
+.video-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+.dream-result-video {
+    width: 100%;
+    max-width: 800px;
+    border-radius: 12px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 30px rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    background: #000;
+}
+
+.dream-result-video::-webkit-media-controls-panel {
+    background-color: rgba(30, 27, 75, 0.9);
+}
+
+.video-info {
+    text-align: center;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .loading-state-3d { 

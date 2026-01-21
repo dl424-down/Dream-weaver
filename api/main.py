@@ -34,6 +34,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # 复用现有的 DreamAnalyzer（位于 analyse_script 包内）
 from analyse_script.dream_analyzer import DreamAnalyzer
+from analyse_script.dream_video_generator import generate_dream_video
 from db.database import (
     init_db,
     save_dream_entry,
@@ -333,6 +334,65 @@ async def generate_image(
     cache.set_image_generation_cache(dream_text, cache_result)
     
     return JSONResponse(result)
+
+@app.post("/generate-video")
+async def generate_video(
+    dream_text: str = Form(...),
+    duration: int = Form(5),
+    size: str = Form("832*480"),
+    entry_id: Optional[int] = Form(None),
+):
+    """生成梦境视频"""
+    try:
+        print(f"[视频生成] 开始生成视频，梦境：{dream_text[:50]}...")
+        
+        # 调用视频生成函数
+        result = generate_dream_video(
+            dream_text=dream_text,
+            duration=duration,
+            size=size,
+            max_poll=30,
+            poll_interval=10
+        )
+        
+        if not result.get("success"):
+            return JSONResponse({
+                "success": False,
+                "error": result.get("error", "视频生成失败"),
+                "video_url": None,
+                "local_path": None
+            }, status_code=500)
+        
+        video_url = result.get("video_url")
+        local_path = result.get("local_path")
+        
+        # 如果提供了 entry_id，更新数据库（记录视频路径）
+        if entry_id is not None and local_path:
+            try:
+                # 这里可以选择保存视频路径到数据库
+                # 如果数据库有视频路径字段，可以添加 update_video_path 函数
+                print(f"[视频生成] 视频已保存到：{local_path}")
+            except Exception as db_err:
+                print(f"[WARN] 更新视频路径失败: {db_err}")
+        
+        return JSONResponse({
+            "success": True,
+            "video_url": video_url,
+            "local_path": local_path,
+            "message": "视频生成成功",
+            "entry_id": entry_id
+        })
+    
+    except Exception as e:
+        print(f"[ERROR] 视频生成失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "video_url": None,
+            "local_path": None
+        }, status_code=500)
 
 @app.get("/dreams/history")
 async def get_dream_history(limit: int = 20):
