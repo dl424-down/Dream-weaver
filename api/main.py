@@ -22,6 +22,9 @@ from typing import Optional, List
 class ComprehensiveAnalysisRequest(BaseModel):
     entry_ids: List[int]
 
+class UpdateDreamRequest(BaseModel):
+    dream_text: str
+
 # 确保项目根目录在导入路径中
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
@@ -557,6 +560,134 @@ async def get_dream_detail(entry_id: int):
         return JSONResponse(result)
     except Exception as e:
         print(f"[ERROR] 获取梦境详情失败: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.put("/dreams/{entry_id}")
+async def update_dream_entry(entry_id: int, request: UpdateDreamRequest):
+    """更新梦境记录并重新分析"""
+    try:
+        # 检查记录是否存在
+        entry = get_dream_entry_by_id(entry_id)
+        if not entry:
+            return JSONResponse({
+                "success": False,
+                "error": "记录不存在"
+            }, status_code=404)
+        
+        # 规范化文本（与 analyze 接口保持一致）
+        dream_text = request.dream_text.strip()
+        if not dream_text:
+            return JSONResponse({
+                "success": False,
+                "error": "梦境内容不能为空"
+            }, status_code=400)
+        
+        # 检查文本是否有变化
+        if entry.get("dream_text") == dream_text:
+            return JSONResponse({
+                "success": False,
+                "error": "内容未修改"
+            }, status_code=400)
+        
+        # 重新分析梦境（不使用缓存，因为内容已改变）
+        print(f"[更新] 重新分析梦境记录 {entry_id}")
+        has_image = bool(entry.get("image_path"))
+        image_path = entry.get("image_path") if has_image else None
+        
+        # 执行分析
+        result = analyzer.analyze_dream(dream_text, image_path=image_path)
+        
+        # 更新数据库（使用数据库模块的函数）
+        from db.database import update_dream_entry as db_update_dream_entry
+        success = db_update_dream_entry(
+            entry_id=entry_id,
+            dream_text=dream_text,
+            text_analysis=result.get("text_analysis"),
+            combined_analysis=result.get("combined_analysis"),
+            visualization_prompt=result.get("visualization_prompt"),
+            image_caption=result.get("image_caption"),
+        )
+        
+        if not success:
+            return JSONResponse({
+                "success": False,
+                "error": "更新数据库失败"
+            }, status_code=500)
+        
+        # 清除相关缓存
+        # 1. 清除该记录的详情缓存
+        cache.invalidate_detail_cache(entry_id)
+        # 2. 清除旧文本的分析缓存（如果存在）
+        old_dream_text = entry.get("dream_text", "")
+        if old_dream_text:
+            cache.delete_analysis_cache(old_dream_text, has_image=has_image)
+        # 3. 清除新文本的分析缓存（因为已更新到数据库，下次应该从数据库读取）
+        cache.delete_analysis_cache(dream_text, has_image=has_image)
+        # 4. 清除历史记录缓存
+        cache.invalidate_history_cache()
+        # 5. 清除所有综合分析缓存（因为记录内容已改变）
+        cache.invalidate_comprehensive_analysis_cache()
+        
+        # 获取更新后的完整记录
+        updated_entry = get_dream_entry_by_id(entry_id)
+        if not updated_entry:
+            return JSONResponse({
+                "success": False,
+                "error": "获取更新后的记录失败"
+            }, status_code=500)
+        
+        # 处理图片路径
+        image_path = updated_entry.get("image_path")
+        image_url = None
+        if image_path and os.path.exists(image_path):
+            try:
+                import base64
+                with open(image_path, 'rb') as f:
+                    img_data = f.read()
+                    img_base64 = base64.b64encode(img_data).decode('utf-8')
+                    ext = os.path.splitext(image_path)[1].lower()
+                    mime_type = {
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp'
+                    }.get(ext, 'image/jpeg')
+                    image_url = f'data:{mime_type};base64,{img_base64}'
+            except Exception as img_error:
+                print(f"[WARN] 读取图片失败: {img_error}")
+        
+        response_data = {
+            "success": True,
+            "entry_id": entry_id,
+            "entry": {
+                "id": updated_entry.get("id"),
+                "dream_text": updated_entry.get("dream_text"),
+                "text_analysis": updated_entry.get("text_analysis", {}),
+                "combined_analysis": updated_entry.get("combined_analysis"),
+                "visualization_prompt": updated_entry.get("visualization_prompt"),
+                "image_caption": updated_entry.get("image_caption"),
+                "image_url": image_url,
+                "created_at": updated_entry.get("created_at")
+            },
+            "analysis": {
+                "text_analysis": result.get("text_analysis"),
+                "combined_analysis": result.get("combined_analysis"),
+                "visualization_prompt": result.get("visualization_prompt"),
+                "image_caption": result.get("image_caption"),
+            }
+        }
+        
+        print(f"[更新] 成功更新梦境记录 {entry_id}")
+        return JSONResponse(response_data)
+        
+    except Exception as e:
+        print(f"[ERROR] 更新梦境记录失败: {e}")
+        import traceback
+        traceback.print_exc()
         return JSONResponse({
             "success": False,
             "error": str(e)

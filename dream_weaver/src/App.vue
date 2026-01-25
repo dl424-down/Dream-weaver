@@ -29,6 +29,16 @@ const videoDuration = ref(5) // 视频时长（秒）
 const videoSize = ref('832*480') // 视频分辨率
 const videoSettingsExpanded = ref(false) // 视频参数是否展开
 
+// --- 语音输入状态 ---
+const isRecording = ref(false) // 是否正在录音
+const speechSupported = ref(false) // 浏览器是否支持语音识别
+let recognition = null // 语音识别对象
+
+// --- 编辑模式状态 ---
+const isEditing = ref(false) // 是否处于编辑模式
+const editingText = ref('') // 编辑中的文本内容
+const isUpdating = ref(false) // 是否正在更新
+
 const fileName = computed(() => imageFile.value ? imageFile.value.name : '')
 
 function onFileChange(e) {
@@ -86,16 +96,32 @@ async function analyzeTextOnly() {
   }
 }
 
-async function generateImage() {
-  if (checkEmpty()) return
+async function generateImage(entryId = null, dreamTextValue = null) {
+  // 如果从详情页调用，使用传入的参数；否则使用主界面的输入
+  const textToUse = dreamTextValue || dreamText.value
+  const entryIdToUse = entryId || lastEntryId.value
+  
+  if (!textToUse && !entryIdToUse) {
+    if (!entryId) {
+      // 主界面调用，需要检查输入
+      if (checkEmpty()) return
+    }
+    error.value = '请先输入梦境内容或选择一条记录'
+    return
+  }
+  
   error.value = ''
-  generatedImage.value = null
   loadingImage.value = true
   
+  // 如果是从详情页调用，不重置 generatedImage
+  if (!entryId) {
+    generatedImage.value = null
+  }
+  
   const form = new FormData()
-  form.append('dream_text', dreamText.value)
-  if (lastEntryId.value) {
-    form.append('entry_id', String(lastEntryId.value))
+  form.append('dream_text', textToUse)
+  if (entryIdToUse) {
+    form.append('entry_id', String(entryIdToUse))
   }
   
   try {
@@ -103,12 +129,20 @@ async function generateImage() {
     if (!resp.ok) throw new Error('图像具象化失败')
     const j = await resp.json()
     if (j && j.image) {
-      generatedImage.value = j.image
-      // 如果后端返回了 entry_id，则更新 lastEntryId（防止前端状态不同步）
+      // 如果是从详情页生成的，更新详情页的图片
+      if (entryIdToUse && selectedEntry.value && selectedEntry.value.id === entryIdToUse) {
+        selectedEntry.value.image_url = j.image
+        // 重新加载详情以获取完整数据
+        await loadEntryDetail(entryIdToUse)
+      } else {
+        // 主界面生成图片
+        generatedImage.value = j.image
+        scrollTo('image-section')
+      }
+      // 如果后端返回了 entry_id，则更新 lastEntryId
       if (j.entry_id) {
         lastEntryId.value = j.entry_id
       }
-      scrollTo('image-section')
     } else {
       throw new Error(j?.message || '虚空未返回图像')
     }
@@ -175,16 +209,27 @@ async function generateVideo() {
   }
 }
 
-async function loadHistory() {
+async function loadHistory(clearSelection = false) {
   historyLoading.value = true
   historyVisible.value = true
-  selectedEntry.value = null
+  // 只有在明确要求清除选择时才清空选中的详情
+  if (clearSelection) {
+    selectedEntry.value = null
+  }
   try {
     const resp = await fetch('http://localhost:8000/dreams/history?limit=20')
     if (!resp.ok) throw new Error('获取历史记录失败')
     const data = await resp.json()
     if (data.success) {
       historyEntries.value = data.entries || []
+      // 如果当前有选中的详情，更新它（如果列表中有对应的记录）
+      if (selectedEntry.value && !clearSelection) {
+        const updatedEntry = data.entries.find(e => e.id === selectedEntry.value.id)
+        if (updatedEntry) {
+          // 只更新预览文本，不重新加载完整详情（避免闪烁）
+          // selectedEntry 的完整数据会在需要时重新加载
+        }
+      }
     } else {
       error.value = data.error || '获取历史记录失败'
     }
@@ -197,6 +242,10 @@ async function loadHistory() {
 
 async function loadEntryDetail(entryId) {
   detailLoading.value = true
+  // 退出编辑模式（如果正在编辑）
+  if (isEditing.value) {
+    cancelEdit()
+  }
   try {
     const resp = await fetch(`http://localhost:8000/dreams/${entryId}`)
     if (!resp.ok) throw new Error('获取详情失败')
@@ -213,12 +262,103 @@ async function loadEntryDetail(entryId) {
   }
 }
 
+// 进入编辑模式
+function startEdit() {
+  if (!selectedEntry.value) return
+  isEditing.value = true
+  editingText.value = selectedEntry.value.dream_text || ''
+  error.value = ''
+}
+
+// 取消编辑
+function cancelEdit() {
+  isEditing.value = false
+  editingText.value = ''
+  error.value = ''
+}
+
+// 保存编辑
+async function saveEdit() {
+  if (!selectedEntry.value) return
+  
+  const newText = editingText.value.trim()
+  if (!newText) {
+    error.value = '梦境内容不能为空'
+    return
+  }
+  
+  // 检查是否有变化
+  if (newText === selectedEntry.value.dream_text) {
+    error.value = '内容未修改'
+    return
+  }
+  
+  isUpdating.value = true
+  error.value = ''
+  
+  try {
+    const resp = await fetch(`http://localhost:8000/dreams/${selectedEntry.value.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        dream_text: newText
+      })
+    })
+    
+    // 先尝试解析响应
+    let data
+    try {
+      data = await resp.json()
+    } catch (parseError) {
+      // 如果无法解析JSON，可能是网络错误或服务器错误
+      if (!resp.ok) {
+        throw new Error(`服务器错误 (${resp.status}): ${resp.statusText}`)
+      }
+      throw new Error('无法解析服务器响应')
+    }
+    
+    if (!resp.ok) {
+      throw new Error(data.error || `更新失败 (状态码: ${resp.status})`)
+    }
+    
+    if (data.success) {
+      // 更新 selectedEntry（保持停留在详情页）
+      selectedEntry.value = data.entry
+      // 退出编辑模式
+      isEditing.value = false
+      editingText.value = ''
+      // 更新 lastEntryId，以便后续生成图片时使用
+      lastEntryId.value = selectedEntry.value.id
+      // 刷新历史记录列表（不清空当前选中的详情）
+      if (historyVisible.value) {
+        loadHistory(false)  // 传入 false，不清空 selectedEntry
+      }
+      // 显示成功提示（可选）
+      console.log('梦境记录已更新')
+    } else {
+      throw new Error(data.error || '更新失败')
+    }
+  } catch (e) {
+    // 更详细的错误处理
+    if (e.name === 'TypeError' && e.message.includes('fetch')) {
+      error.value = '无法连接到后端服务器，请确保后端服务正在运行 (http://localhost:8000)'
+    } else {
+      error.value = e.message || String(e)
+    }
+    console.error('更新失败:', e)
+  } finally {
+    isUpdating.value = false
+  }
+}
+
 function toggleSidebar() {
   historyVisible.value = !historyVisible.value
   if (!historyVisible.value) {
     selectedEntry.value = null
   } else if (historyEntries.value.length === 0) {
-    loadHistory()
+    loadHistory(true)  // 打开侧边栏时，清空选中的详情
   }
 }
 
@@ -500,6 +640,80 @@ function animate() {
 
   renderer.render(scene, camera)
 }
+
+// ======================
+// 🎤 语音输入模块（浏览器原生 Speech Recognition）
+// ======================
+
+onMounted(() => {
+  // 检查浏览器是否支持语音识别
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  
+  if (!SpeechRecognition) {
+    speechSupported.value = false
+    console.warn("当前浏览器不支持语音识别")
+    return
+  }
+  
+  speechSupported.value = true
+  
+  // 初始化语音识别
+  recognition = new SpeechRecognition()
+  recognition.lang = "zh-CN"          // 中文识别
+  recognition.continuous = true       // 连续识别
+  recognition.interimResults = false  // 只要最终结果
+  
+  recognition.onstart = () => {
+    isRecording.value = true
+    console.log("[语音] 开始录音")
+  }
+  
+  recognition.onend = () => {
+    isRecording.value = false
+    console.log("[语音] 录音结束")
+  }
+  
+  recognition.onerror = (e) => {
+    console.error("[语音] 识别错误：", e)
+    isRecording.value = false
+    error.value = `语音识别错误: ${e.error}`
+  }
+  
+  recognition.onresult = (event) => {
+    let transcript = ""
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript
+    }
+    
+    // 将识别结果追加到文本框中
+    if (transcript.trim()) {
+      dreamText.value += (dreamText.value ? " " : "") + transcript.trim()
+      console.log("[语音] 识别结果：", transcript)
+    }
+  }
+})
+
+// 切换录音状态
+function toggleRecording() {
+  if (!recognition || !speechSupported.value) {
+    error.value = "当前浏览器不支持语音输入"
+    return
+  }
+  
+  if (isRecording.value) {
+    // 停止录音
+    recognition.stop()
+    isRecording.value = false
+  } else {
+    // 开始录音
+    try {
+      recognition.start()
+    } catch (e) {
+      console.error("[语音] 启动失败：", e)
+      error.value = "无法启动语音识别，请检查麦克风权限"
+    }
+  }
+}
 </script>
 
 <template>
@@ -602,8 +816,36 @@ function animate() {
       <Transition name="fade">
         <div v-if="selectedEntry" class="detail-content-main">
           <div class="detail-header-main">
-            <h2>回忆详情 #{{ selectedEntry.id }}</h2>
-            <button class="close-btn" @click="selectedEntry = null">×</button>
+            <h2>
+              {{ isEditing ? '编辑模式' : '回忆详情' }} #{{ selectedEntry.id }}
+            </h2>
+            <div class="header-actions">
+              <button 
+                v-if="!isEditing" 
+                class="edit-btn" 
+                @click="startEdit"
+                :disabled="detailLoading"
+              >
+                ✏️ 编辑
+              </button>
+              <button 
+                v-if="isEditing" 
+                class="save-btn" 
+                @click="saveEdit"
+                :disabled="isUpdating"
+              >
+                {{ isUpdating ? '保存中...' : '💾 保存并重新分析' }}
+              </button>
+              <button 
+                v-if="isEditing" 
+                class="cancel-btn" 
+                @click="cancelEdit"
+                :disabled="isUpdating"
+              >
+                取消
+              </button>
+              <button class="close-btn" @click="selectedEntry = null; cancelEdit()">×</button>
+            </div>
           </div>
 
           <div v-if="detailLoading" class="loading-state-3d">
@@ -617,10 +859,27 @@ function animate() {
 
           <div v-else class="detail-content-inner">
             <!-- 1. 梦境描述 -->
-            <div class="detail-section">
+            <div class="detail-section" :class="{ 'editing': isEditing }">
               <h4>梦境描述</h4>
-              <p>{{ selectedEntry.dream_text }}</p>
+              <div v-if="isEditing" class="edit-textarea-wrapper">
+                <textarea 
+                  v-model="editingText" 
+                  class="edit-textarea"
+                  rows="6"
+                  placeholder="输入梦境内容..."
+                ></textarea>
+                <div v-if="error" class="error-message">{{ error }}</div>
+              </div>
+              <p v-else>{{ selectedEntry.dream_text }}</p>
             </div>
+            
+            <!-- 编辑模式提示 -->
+            <div v-if="isEditing" class="edit-mode-notice">
+              <p>⚠️ 编辑后将重新分析梦境内容，其他分析结果将更新</p>
+            </div>
+            
+            <!-- 2-5. 其他分析结果（编辑模式下暂时隐藏或显示提示） -->
+            <template v-if="!isEditing">
 
             <!-- 2. 文本分析（情绪 / 主题 / 关键词） -->
             <div v-if="selectedEntry.text_analysis" class="detail-section">
@@ -654,14 +913,36 @@ function animate() {
             </div>
 
             <!-- 5. 生成的图片（放在最后，沿用主界面的倾斜样式） -->
-            <div v-if="selectedEntry.image_url" class="detail-section detail-image-section">
-              <h4>梦境重现</h4>
-              <div class="image-portal-3d">
+            <div class="detail-section detail-image-section">
+              <div class="image-section-header">
+                <h4>梦境重现</h4>
+                <button 
+                  class="regenerate-image-btn" 
+                  @click="generateImage(selectedEntry.id, selectedEntry.dream_text)"
+                  :disabled="loadingImage"
+                >
+                  {{ loadingImage ? '生成中...' : '🔄 重新生成图片' }}
+                </button>
+              </div>
+              <div v-if="loadingImage" class="image-loading">
+                <div class="cube-loader">
+                  <div class="cube-face front"></div><div class="cube-face back"></div>
+                  <div class="cube-face right"></div><div class="cube-face left"></div>
+                  <div class="cube-face top"></div><div class="cube-face bottom"></div>
+                </div>
+                <p class="loading-text-glitch">正在生成图片...</p>
+              </div>
+              <div v-else-if="selectedEntry.image_url" class="image-portal-3d">
                 <div class="image-wrapper-tilt">
                   <img :src="selectedEntry.image_url" alt="梦境图片" class="dream-result-img" />
                 </div>
               </div>
+              <div v-else class="no-image-placeholder">
+                <p>暂无图片，点击"重新生成图片"按钮生成</p>
+              </div>
             </div>
+
+            </template>
 
             <div class="detail-footer">
               <span class="detail-date">记录时间：{{ formatDate(selectedEntry.created_at) }}</span>
@@ -697,6 +978,20 @@ function animate() {
             <div class="corner-accents-3d">
               <div class="c-piece tl"></div><div class="c-piece tr"></div>
               <div class="c-piece bl"></div><div class="c-piece br"></div>
+            </div>
+            <!-- 🎤 语音输入按钮 -->
+            <button
+              v-if="speechSupported"
+              class="voice-input-btn"
+              :class="{ 'recording': isRecording }"
+              @click="toggleRecording"
+              type="button"
+            >
+              <span class="voice-icon">{{ isRecording ? '🎙' : '🎤' }}</span>
+              <span class="voice-text">{{ isRecording ? '正在聆听...' : '语音输入' }}</span>
+            </button>
+            <div v-else class="voice-unsupported-tip">
+              ⚠️ 当前浏览器不支持语音输入
             </div>
           </div>
 
@@ -1029,7 +1324,12 @@ function animate() {
   text-shadow: 0 0 8px var(--neon-cyan);
 }
 
-.input-field-wrap { position: relative; margin-top:20px;margin-bottom: 30px; transform-style: preserve-3d;}
+.input-field-wrap { 
+  position: relative; 
+  margin-top:20px;
+  margin-bottom: 30px; 
+  transform-style: preserve-3d;
+}
 
 .hologram-input {
   width: 100%;
@@ -1061,6 +1361,81 @@ function animate() {
 .tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
 .bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
 .br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+/* 语音输入按钮样式 */
+.voice-input-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  border-radius: 20px;
+  color: var(--neon-cyan);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.voice-input-btn:hover {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);
+  transform: translateY(-2px);
+}
+
+.voice-input-btn.recording {
+  background: rgba(236, 72, 153, 0.2);
+  border-color: var(--neon-pink);
+  color: var(--neon-pink);
+  animation: voicePulse 1.5s ease-in-out infinite;
+}
+
+.voice-input-btn.recording:hover {
+  background: rgba(236, 72, 153, 0.3);
+  box-shadow: 0 0 25px rgba(236, 72, 153, 0.6);
+}
+
+@keyframes voicePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(236, 72, 153, 0);
+  }
+}
+
+.voice-icon {
+  font-size: 16px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.voice-text {
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px currentColor;
+}
+
+.voice-unsupported-tip {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  background: rgba(100, 100, 100, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #8e8ea0;
+  font-size: 11px;
+  z-index: 10;
+}
 
 .control-deck { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 25px; margin-top: 30px;}
 .action-module { display: flex; gap: 15px; flex-wrap: wrap; }
@@ -1525,6 +1900,132 @@ function animate() {
   transform: rotate(90deg);
 }
 
+/* 编辑按钮样式 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.edit-btn, .save-btn, .cancel-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 1px;
+}
+
+.edit-btn {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+  text-shadow: 0 0 8px var(--neon-cyan);
+}
+
+.edit-btn:hover:not(:disabled) {
+  background: rgba(6, 182, 212, 0.25);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+  transform: translateY(-2px);
+}
+
+.save-btn {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: var(--neon-purple);
+  color: var(--neon-purple);
+}
+
+.save-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.3);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+  transform: translateY(-2px);
+}
+
+.cancel-btn {
+  background: rgba(100, 100, 100, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: rgba(100, 100, 100, 0.3);
+  transform: translateY(-2px);
+}
+
+.edit-btn:disabled, .save-btn:disabled, .cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 编辑模式样式 */
+.detail-section.editing {
+  border: 2px solid var(--neon-cyan);
+  border-radius: 8px;
+  padding: 20px;
+  background: rgba(6, 182, 212, 0.05);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+.edit-textarea-wrapper {
+  position: relative;
+}
+
+.edit-textarea {
+  width: 100%;
+  background: rgba(2, 6, 23, 0.8);
+  border: 1px solid var(--neon-cyan);
+  color: #fff;
+  padding: 15px;
+  font-size: 1rem;
+  line-height: 1.6;
+  border-radius: 6px;
+  outline: none;
+  transition: 0.3s;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.edit-textarea:focus {
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+  background: rgba(2, 6, 23, 0.9);
+}
+
+.edit-mode-notice {
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(236, 72, 153, 0.1);
+  border: 1px solid var(--neon-pink);
+  border-radius: 6px;
+  color: var(--neon-pink);
+  text-align: center;
+  box-shadow: 0 0 15px rgba(236, 72, 153, 0.2);
+}
+
+.edit-mode-notice p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.error-message {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(236, 72, 153, 0.2);
+  border: 1px solid var(--neon-pink);
+  border-radius: 6px;
+  color: var(--neon-pink);
+  font-size: 13px;
+}
+
 .empty-history {
   text-align: center;
   padding: 60px 20px;
@@ -1723,6 +2224,8 @@ function animate() {
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
 .detail-header-main h2 {
@@ -1731,6 +2234,8 @@ function animate() {
   margin: 0;
   color: #fff;
   text-shadow: 0 0 10px var(--neon-purple);
+  flex: 1;
+  min-width: 200px;
 }
 
 .detail-content-inner {
@@ -1844,6 +2349,63 @@ function animate() {
   text-shadow: 0 0 10px var(--neon-pink);
   font-size: 1.1rem;
   margin-bottom: 20px;
+}
+
+.image-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.regenerate-image-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--neon-purple);
+  background: rgba(168, 85, 247, 0.2);
+  color: var(--neon-purple);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 1px;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+  text-shadow: 0 0 8px var(--neon-purple);
+}
+
+.regenerate-image-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.3);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+  transform: translateY(-2px);
+}
+
+.regenerate-image-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.image-loading {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.no-image-placeholder {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8e8ea0;
+  font-size: 14px;
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .detail-image-wrapper {

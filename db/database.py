@@ -113,6 +113,62 @@ def update_image_path(entry_id: int, image_path: str) -> None:
             conn.commit()
             print(f"[数据库] 已更新梦境记录 {entry_id} 的图片路径为: {image_path}")
 
+def update_dream_entry(
+    entry_id: int,
+    dream_text: str,
+    text_analysis: Optional[Dict] = None,
+    combined_analysis: Optional[str] = None,
+    visualization_prompt: Optional[str] = None,
+    image_caption: Optional[str] = None,
+) -> bool:
+    """更新指定梦境记录的内容和分析结果"""
+    with _lock:
+        with sqlite3.connect(DB_PATH) as conn:
+            # 准备更新数据
+            updates = []
+            params = []
+            
+            if dream_text:
+                updates.append("dream_text = ?")
+                params.append(dream_text)
+            
+            if text_analysis is not None:
+                updates.append("text_analysis_json = ?")
+                params.append(json.dumps(text_analysis, ensure_ascii=False))
+            
+            if combined_analysis is not None:
+                updates.append("combined_analysis = ?")
+                params.append(combined_analysis)
+            
+            if visualization_prompt is not None:
+                updates.append("visualization_prompt = ?")
+                params.append(visualization_prompt)
+            
+            if image_caption is not None:
+                updates.append("image_caption = ?")
+                params.append(image_caption)
+            
+            if not updates:
+                print(f"[数据库] 警告：没有要更新的字段，entry_id={entry_id}")
+                return False
+            
+            # 执行更新
+            params.append(entry_id)
+            sql = f"""
+                UPDATE dream_entries
+                SET {', '.join(updates)}
+                WHERE id = ?
+            """
+            cursor = conn.execute(sql, params)
+            conn.commit()
+            
+            if cursor.rowcount > 0:
+                print(f"[数据库] 已更新梦境记录 {entry_id}")
+                return True
+            else:
+                print(f"[数据库] 警告：未找到要更新的记录，entry_id={entry_id}")
+                return False
+
 def get_recent_entries(limit: int = 20):
     """（可选）获取最近的梦境记录，便于调试"""
     with sqlite3.connect(DB_PATH) as conn:
