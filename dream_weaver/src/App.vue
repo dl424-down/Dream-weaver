@@ -1,7 +1,6 @@
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import * as THREE from 'three'
+import { ref, computed, onMounted, nextTick } from 'vue'
 
 // --- 业务逻辑状态 ---
 const dreamText = ref('')
@@ -11,7 +10,6 @@ const loadingImage = ref(false)
 const result = ref(null)
 const generatedImage = ref(null)
 const error = ref('')
-const canvasRef = ref(null) // 3D 画布引用
 const historyVisible = ref(false)
 const historyLoading = ref(false)
 const historyEntries = ref([])
@@ -104,7 +102,7 @@ async function generateImage(entryId = null, dreamTextValue = null) {
   if (!textToUse && !entryIdToUse) {
     if (!entryId) {
       // 主界面调用，需要检查输入
-      if (checkEmpty()) return
+  if (checkEmpty()) return
     }
     error.value = '请先输入梦境内容或选择一条记录'
     return
@@ -136,7 +134,7 @@ async function generateImage(entryId = null, dreamTextValue = null) {
         await loadEntryDetail(entryIdToUse)
       } else {
         // 主界面生成图片
-        generatedImage.value = j.image
+      generatedImage.value = j.image
         scrollTo('image-section')
       }
       // 如果后端返回了 entry_id，则更新 lastEntryId
@@ -214,7 +212,7 @@ async function loadHistory(clearSelection = false) {
   historyVisible.value = true
   // 只有在明确要求清除选择时才清空选中的详情
   if (clearSelection) {
-    selectedEntry.value = null
+  selectedEntry.value = null
   }
   try {
     const resp = await fetch('http://localhost:8000/dreams/history?limit=20')
@@ -481,165 +479,6 @@ function formatDate(dateString) {
   }
 }
 
-// --- Three.js 3D 场景逻辑 ---
-let scene, camera, renderer, particles, starField
-let mouseX = 0, mouseY = 0
-let targetX = 0, targetY = 0
-const windowHalfX = window.innerWidth / 2
-const windowHalfY = window.innerHeight / 2
-
-onMounted(() => {
-  initThree()
-  animate()
-  document.addEventListener('mousemove', onDocumentMouseMove)
-  window.addEventListener('resize', onWindowResize)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('mousemove', onDocumentMouseMove)
-  window.removeEventListener('resize', onWindowResize)
-  // 清理内存
-  if (renderer) renderer.dispose()
-  if (scene) scene.clear()
-})
-
-function initThree() {
-  // 1. 场景与相机
-  scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(0x0a0a2a, 0.001)
-
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000)
-  camera.position.z = 1000
-
-  // 2. 渲染器
-  renderer = new THREE.WebGLRenderer({ canvas: canvasRef.value, antialias: true, alpha: true })
-  renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.setSize(window.innerWidth, window.innerHeight)
-  renderer.setClearColor(0x000000, 1)
-
-  // 3. 创建粒子材质
-  const particleTexture = (() => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 32; canvas.height = 32;
-      const ctx = canvas.getContext('2d');
-      const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.2, 'rgba(240,240,255,0.8)');
-      gradient.addColorStop(0.5, 'rgba(120,120,255,0.2)');
-      gradient.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 32, 32);
-      const texture = new THREE.Texture(canvas);
-      texture.needsUpdate = true;
-      return texture;
-  })();
-
-  // 4. 创建主要星云粒子群
-  const geometry = new THREE.BufferGeometry()
-  
-  // ▼▼▼ 修正了这里的空格错误 ▼▼▼
-  const particleCount = 6000 
-  
-  const positions = new Float32Array(particleCount * 3)
-  const colors = new Float32Array(particleCount * 3)
-
-  for (let i = 0; i < particleCount; i++) {
-    const x = (Math.random() - 0.5) * 2000
-    const y = (Math.random() - 0.5) * 2000
-    const z = Math.random() * 3000 - 1500 
-
-    positions[i * 3] = x
-    positions[i * 3 + 1] = y
-    positions[i * 3 + 2] = z
-
-    const colorType = Math.random()
-    if (colorType < 0.33) { // Purple
-        colors[i * 3] = 0.6 + Math.random() * 0.2
-        colors[i * 3 + 1] = 0.3 + Math.random() * 0.2
-        colors[i * 3 + 2] = 0.9
-    } else if (colorType < 0.66) { // Blue
-        colors[i * 3] = 0.2 + Math.random() * 0.2
-        colors[i * 3 + 1] = 0.5 + Math.random() * 0.3
-        colors[i * 3 + 2] = 1.0
-    } else { // Cyan
-        colors[i * 3] = 0.2
-        colors[i * 3 + 1] = 0.8 + Math.random() * 0.2
-        colors[i * 3 + 2] = 0.9 + Math.random() * 0.1
-    }
-  }
-
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-
-  const material = new THREE.PointsMaterial({
-    size: 15,
-    map: particleTexture,
-    vertexColors: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    transparent: true,
-    opacity: 0.8
-  })
-
-  particles = new THREE.Points(geometry, material)
-  scene.add(particles)
-
-  // 5. 添加背景微小的星尘场
-  const starGeo = new THREE.BufferGeometry()
-  const starCount = 4000
-  const starPos = new Float32Array(starCount * 3)
-  for(let i=0; i<starCount*3; i++) {
-      starPos[i] = (Math.random() - 0.5) * 4000
-  }
-  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-  const starMat = new THREE.PointsMaterial({
-      size: 3, color: 0xaaaaaa, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5
-  })
-  starField = new THREE.Points(starGeo, starMat)
-  scene.add(starField)
-}
-
-function onDocumentMouseMove(event) {
-  mouseX = (event.clientX - windowHalfX) / 2
-  mouseY = (event.clientY - windowHalfY) / 2
-}
-
-function onWindowResize() {
-  const width = window.innerWidth
-  const height = window.innerHeight
-  windowHalfX = width / 2
-  windowHalfY = height / 2
-
-  camera.aspect = width / height
-  camera.updateProjectionMatrix()
-  renderer.setSize(width, height)
-}
-
-function animate() {
-  requestAnimationFrame(animate)
-  
-  targetX = mouseX * .05
-  targetY = mouseY * .05
-  camera.position.x += (targetX - camera.position.x) * 0.02
-  camera.position.y += (-targetY - camera.position.y) * 0.02
-  camera.lookAt(scene.position)
-
-  particles.rotation.x += 0.0005
-  particles.rotation.y += 0.001
-  
-  const positions = particles.geometry.attributes.position.array;
-  for(let i = 0; i < positions.length; i+=3) {
-      positions[i+2] += 1; 
-      if(positions[i+2] > 1500) {
-          positions[i+2] = -1500;
-      }
-  }
-  particles.geometry.attributes.position.needsUpdate = true;
-
-  starField.rotation.y -= 0.0002
-
-  renderer.render(scene, camera)
-}
 
 // ======================
 // 🎤 语音输入模块（浏览器原生 Speech Recognition）
@@ -717,8 +556,6 @@ function toggleRecording() {
 </script>
 
 <template>
-  <canvas ref="canvasRef" class="webgl-bg"></canvas>
-
   <div class="dream-universe-ui">
     <!-- 侧边栏 -->
     <div class="sidebar-container" :class="{ 'collapsed': sidebarCollapsed, 'visible': historyVisible }">
@@ -915,7 +752,7 @@ function toggleRecording() {
             <!-- 5. 生成的图片（放在最后，沿用主界面的倾斜样式） -->
             <div class="detail-section detail-image-section">
               <div class="image-section-header">
-                <h4>梦境重现</h4>
+              <h4>梦境重现</h4>
                 <button 
                   class="regenerate-image-btn" 
                   @click="generateImage(selectedEntry.id, selectedEntry.dream_text)"
