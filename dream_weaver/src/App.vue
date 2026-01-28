@@ -479,225 +479,14 @@ function formatDate(dateString) {
   }
 }
 
-<<<<<<< HEAD
-// --- Three.js 3D 场景逻辑 ---
-let scene, camera, renderer, particles, starField
-let mouseX = 0, mouseY = 0
-let targetX = 0, targetY = 0
-const windowHalfX = window.innerWidth / 2
-const windowHalfY = window.innerHeight / 2
-
-onMounted(() => {
-  initThree()
-  animate()
-  document.addEventListener('mousemove', onDocumentMouseMove)
-  window.addEventListener('resize', onWindowResize)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('mousemove', onDocumentMouseMove)
-  window.removeEventListener('resize', onWindowResize)
-  // 清理内存
-  if (renderer) renderer.dispose()
-  if (scene) scene.clear()
-})
-
-function initThree() {
-  // 1. 场景与相机
-  scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(0x0a0a2a, 0.001)
-
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000)
-  camera.position.z = 1000
-
-  // 2. 渲染器
-  renderer = new THREE.WebGLRenderer({ canvas: canvasRef.value, antialias: true, alpha: true })
-  renderer.setPixelRatio(window.devicePixelRatio)
-  renderer.setSize(window.innerWidth, window.innerHeight)
-  renderer.setClearColor(0x000000, 1)
-
-  // 3. 创建粒子材质
-  const particleTexture = (() => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 32; canvas.height = 32;
-      const ctx = canvas.getContext('2d');
-      const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.2, 'rgba(240,240,255,0.8)');
-      gradient.addColorStop(0.5, 'rgba(120,120,255,0.2)');
-      gradient.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 32, 32);
-      const texture = new THREE.Texture(canvas);
-      texture.needsUpdate = true;
-      return texture;
-  })();
-
-  // 4. 创建主要星云粒子群
-  const geometry = new THREE.BufferGeometry()
-  
-  // ▼▼▼ 修正了这里的空格错误 ▼▼▼
-  const particleCount = 6000 
-  
-  const positions = new Float32Array(particleCount * 3)
-  const colors = new Float32Array(particleCount * 3)
-
-  for (let i = 0; i < particleCount; i++) {
-    const x = (Math.random() - 0.5) * 2000
-    const y = (Math.random() - 0.5) * 2000
-    const z = Math.random() * 3000 - 1500 
-
-    positions[i * 3] = x
-    positions[i * 3 + 1] = y
-    positions[i * 3 + 2] = z
-
-    const colorType = Math.random()
-    if (colorType < 0.33) { // Purple
-        colors[i * 3] = 0.6 + Math.random() * 0.2
-        colors[i * 3 + 1] = 0.3 + Math.random() * 0.2
-        colors[i * 3 + 2] = 0.9
-    } else if (colorType < 0.66) { // Blue
-        colors[i * 3] = 0.2 + Math.random() * 0.2
-        colors[i * 3 + 1] = 0.5 + Math.random() * 0.3
-        colors[i * 3 + 2] = 1.0
-    } else { // Cyan
-        colors[i * 3] = 0.2
-        colors[i * 3 + 1] = 0.8 + Math.random() * 0.2
-        colors[i * 3 + 2] = 0.9 + Math.random() * 0.1
-    }
-  }
-
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-
-  const material = new THREE.PointsMaterial({
-    size: 15,
-    map: particleTexture,
-    vertexColors: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    transparent: true,
-    opacity: 0.8
-  })
-
-  particles = new THREE.Points(geometry, material)
-  scene.add(particles)
-
-  // 5. 添加背景微小的星尘场
-  const starGeo = new THREE.BufferGeometry()
-  const starCount = 4000
-  const starPos = new Float32Array(starCount * 3)
-  for(let i=0; i<starCount*3; i++) {
-      starPos[i] = (Math.random() - 0.5) * 4000
-  }
-  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-  const starMat = new THREE.PointsMaterial({
-      size: 3, color: 0xaaaaaa, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5
-  })
-  starField = new THREE.Points(starGeo, starMat)
-  scene.add(starField)
-}
-
-function onDocumentMouseMove(event) {
-  mouseX = (event.clientX - windowHalfX) / 2
-  mouseY = (event.clientY - windowHalfY) / 2
-}
-
-function onWindowResize() {
-  const width = window.innerWidth
-  const height = window.innerHeight
-  windowHalfX = width / 2
-  windowHalfY = height / 2
-
-  camera.aspect = width / height
-  camera.updateProjectionMatrix()
-  renderer.setSize(width, height)
-}
-
-function animate() {
-  requestAnimationFrame(animate)
-  
-  targetX = mouseX * .05
-  targetY = mouseY * .05
-  camera.position.x += (targetX - camera.position.x) * 0.02
-  camera.position.y += (-targetY - camera.position.y) * 0.02
-  camera.lookAt(scene.position)
-
-  particles.rotation.x += 0.0005
-  particles.rotation.y += 0.001
-  
-  const positions = particles.geometry.attributes.position.array;
-  for(let i = 0; i < positions.length; i+=3) {
-      positions[i+2] += 1; 
-      if(positions[i+2] > 1500) {
-          positions[i+2] = -1500;
-      }
-  }
-  particles.geometry.attributes.position.needsUpdate = true;
-
-  starField.rotation.y -= 0.0002
-
-  renderer.render(scene, camera)
-}
-<<<<<<< HEAD
-=======
-=======
->>>>>>> b8febb229b35541fc801139fe81e0b2667554f61
-
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
-// ======================
-// 🎤 语音输入模块（浏览器原生 Speech Recognition）
-// ======================
-
-<<<<<<< HEAD
-const isRecording = ref(false)
-const speechSupported = ref(true)
-
-let recognition = null
-
-onMounted(() => {
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition
-
-=======
-onMounted(() => {
-  // 检查浏览器是否支持语音识别
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-  
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
-  if (!SpeechRecognition) {
-    speechSupported.value = false
-    console.warn("当前浏览器不支持语音识别")
-    return
-  }
-<<<<<<< HEAD
-
-=======
   
   speechSupported.value = true
   
   // 初始化语音识别
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
   recognition = new SpeechRecognition()
   recognition.lang = "zh-CN"          // 中文识别
   recognition.continuous = true       // 连续识别
   recognition.interimResults = false  // 只要最终结果
-<<<<<<< HEAD
-
-  recognition.onstart = () => {
-    isRecording.value = true
-  }
-
-  recognition.onend = () => {
-    isRecording.value = false
-  }
-
-  recognition.onerror = (e) => {
-    console.error("语音识别错误：", e)
-    isRecording.value = false
-  }
-
-=======
   
   recognition.onstart = () => {
     isRecording.value = true
@@ -715,34 +504,11 @@ onMounted(() => {
     error.value = `语音识别错误: ${e.error}`
   }
   
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
   recognition.onresult = (event) => {
     let transcript = ""
     for (let i = event.resultIndex; i < event.results.length; i++) {
       transcript += event.results[i][0].transcript
     }
-<<<<<<< HEAD
-
-    // 🔑 核心：语音内容写入 dreamText
-    dreamText.value += (dreamText.value ? " " : "") + transcript
-
-    // 🔮 未来 AI 追问的钩子（现在不启用）
-    // onSpeechSegment(transcript)
-  }
-})
-
-// 开始 / 停止录音
-function toggleRecording() {
-  if (!recognition) return
-
-  if (isRecording.value) {
-    recognition.stop()
-  } else {
-    recognition.start()
-  }
-}
-
-=======
     
     // 将识别结果追加到文本框中
     if (transcript.trim()) {
@@ -773,7 +539,6 @@ function toggleRecording() {
     }
   }
 }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 </script>
 
 <template>
@@ -874,10 +639,6 @@ function toggleRecording() {
       <Transition name="fade">
         <div v-if="selectedEntry" class="detail-content-main">
           <div class="detail-header-main">
-<<<<<<< HEAD
-            <h2>回忆详情 #{{ selectedEntry.id }}</h2>
-            <button class="close-btn" @click="selectedEntry = null">×</button>
-=======
             <h2>
               {{ isEditing ? '编辑模式' : '回忆详情' }} #{{ selectedEntry.id }}
             </h2>
@@ -908,7 +669,6 @@ function toggleRecording() {
               </button>
               <button class="close-btn" @click="selectedEntry = null; cancelEdit()">×</button>
             </div>
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
           </div>
 
           <div v-if="detailLoading" class="loading-state-3d">
@@ -922,12 +682,6 @@ function toggleRecording() {
 
           <div v-else class="detail-content-inner">
             <!-- 1. 梦境描述 -->
-<<<<<<< HEAD
-            <div class="detail-section">
-              <h4>梦境描述</h4>
-              <p>{{ selectedEntry.dream_text }}</p>
-            </div>
-=======
             <div class="detail-section" :class="{ 'editing': isEditing }">
               <h4>梦境描述</h4>
               <div v-if="isEditing" class="edit-textarea-wrapper">
@@ -949,7 +703,6 @@ function toggleRecording() {
             
             <!-- 2-5. 其他分析结果（编辑模式下暂时隐藏或显示提示） -->
             <template v-if="!isEditing">
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 
             <!-- 2. 文本分析（情绪 / 主题 / 关键词） -->
             <div v-if="selectedEntry.text_analysis" class="detail-section">
@@ -983,11 +736,6 @@ function toggleRecording() {
             </div>
 
             <!-- 5. 生成的图片（放在最后，沿用主界面的倾斜样式） -->
-<<<<<<< HEAD
-            <div v-if="selectedEntry.image_url" class="detail-section detail-image-section">
-              <h4>梦境重现</h4>
-              <div class="image-portal-3d">
-=======
             <div class="detail-section detail-image-section">
               <div class="image-section-header">
               <h4>梦境重现</h4>
@@ -1008,15 +756,10 @@ function toggleRecording() {
                 <p class="loading-text-glitch">正在生成图片...</p>
               </div>
               <div v-else-if="selectedEntry.image_url" class="image-portal-3d">
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
                 <div class="image-wrapper-tilt">
                   <img :src="selectedEntry.image_url" alt="梦境图片" class="dream-result-img" />
                 </div>
               </div>
-<<<<<<< HEAD
-            </div>
-
-=======
               <div v-else class="no-image-placeholder">
                 <p>暂无图片，点击"重新生成图片"按钮生成</p>
               </div>
@@ -1024,7 +767,6 @@ function toggleRecording() {
 
             </template>
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
             <div class="detail-footer">
               <span class="detail-date">记录时间：{{ formatDate(selectedEntry.created_at) }}</span>
             </div>
@@ -1049,26 +791,6 @@ function toggleRecording() {
         <div class="inner-content">
           <label class="holo-label" >输入梦境内容</label>
           
-<<<<<<< HEAD
-          <div class="dream-input-wrapper">
-            <textarea
-              class="hologram-input"
-              v-model="dreamText"
-              placeholder="请描述你的梦境..."
-            ></textarea>
-
-            <!-- 🎤 语音输入按钮 -->
-            <button
-              v-if="speechSupported"
-              class="voice-btn"
-              :class="{ recording: isRecording }"
-              @click="toggleRecording"
-            >
-              {{ isRecording ? "🎙 正在聆听…" : "🎤 语音输入" }}
-            </button>
-
-            <div v-else class="voice-tip">
-=======
           <div class="input-field-wrap">
             <textarea 
               v-model="dreamText" 
@@ -1092,7 +814,6 @@ function toggleRecording() {
               <span class="voice-text">{{ isRecording ? '正在聆听...' : '语音输入' }}</span>
             </button>
             <div v-else class="voice-unsupported-tip">
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
               ⚠️ 当前浏览器不支持语音输入
             </div>
           </div>
@@ -1125,8 +846,6 @@ function toggleRecording() {
                 </span>
               </button>
 
-<<<<<<< HEAD
-=======
               <button class="cyber-btn cinema" :disabled="loading || loadingVideo" @click="generateVideo">
                 <span class="btn-bg-anim"></span>
                 <span class="btn-text">
@@ -1138,13 +857,10 @@ function toggleRecording() {
                 <span class="btn-text">{{ videoSettingsExpanded ? '▼ 视频参数' : '▶ 视频参数' }}</span>
               </button>
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
               <button class="cyber-btn history" @click="toggleSidebar">
                 <span class="btn-text">查找往期回忆</span>
               </button>
             </div>
-<<<<<<< HEAD
-=======
 
             <!-- 视频参数设置 -->
             <div v-if="videoSettingsExpanded" class="video-settings-panel glass-panel-3d">
@@ -1166,7 +882,6 @@ function toggleRecording() {
                 </div>
               </div>
             </div>
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
           </div>
           
           <div v-if="error" class="system-alert">
@@ -1233,8 +948,6 @@ function toggleRecording() {
         </div>
       </Transition>
 
-<<<<<<< HEAD
-=======
       <!-- 视频生成结果 -->
       <Transition name="hologram-reveal">
         <div v-if="generatedVideo || loadingVideo" id="video-section" class="cinema-deck glass-panel-3d">
@@ -1269,7 +982,6 @@ function toggleRecording() {
         </div>
       </Transition>
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
       <!-- 综合分析结果 -->
       <Transition name="hologram-reveal">
         <div v-if="comprehensiveAnalysis" id="comprehensive-section" class="comprehensive-deck glass-panel-3d">
@@ -1435,16 +1147,12 @@ function toggleRecording() {
   text-shadow: 0 0 8px var(--neon-cyan);
 }
 
-<<<<<<< HEAD
-.input-field-wrap { position: relative; margin-top:20px;margin-bottom: 30px; transform-style: preserve-3d;}
-=======
 .input-field-wrap { 
   position: relative; 
   margin-top:20px;
   margin-bottom: 30px; 
   transform-style: preserve-3d;
 }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 
 .hologram-input {
   width: 100%;
@@ -1477,8 +1185,6 @@ function toggleRecording() {
 .bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
 .br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
 
-<<<<<<< HEAD
-=======
 /* 语音输入按钮样式 */
 .voice-input-btn {
   position: absolute;
@@ -1554,7 +1260,6 @@ function toggleRecording() {
   z-index: 10;
 }
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 .control-deck { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 25px; margin-top: 30px;}
 .action-module { display: flex; gap: 15px; flex-wrap: wrap; }
 
@@ -1587,12 +1292,9 @@ function toggleRecording() {
 .cyber-btn.magic { border-color: var(--neon-pink); box-shadow: 0 0 15px rgba(236, 72, 153, 0.2); }
 .cyber-btn.magic:hover { background: rgba(236, 72, 153, 0.2); box-shadow: 0 0 40px rgba(236, 72, 153, 0.6); }
 
-<<<<<<< HEAD
-=======
 .cyber-btn.cinema { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
 .cyber-btn.cinema:hover { background: rgba(59, 130, 246, 0.2); box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 .cyber-btn.secondary:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
 
 .cyber-btn.history { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
@@ -1601,8 +1303,6 @@ function toggleRecording() {
 .cyber-btn.small { padding: 10px 20px; font-size: 0.8rem; clip-path: none; border-radius: 50px; border-color: #64748b;}
 .cyber-btn.small.active { border-color: var(--neon-cyan); background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 20px rgba(6, 182, 212, 0.4); }
 
-<<<<<<< HEAD
-=======
 .cyber-btn.settings-toggle { 
     padding: 8px 16px; 
     font-size: 0.85rem;
@@ -1718,7 +1418,6 @@ function toggleRecording() {
     box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
 }
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 .glass-panel-3d {
     background: rgba(20, 20, 40, 0.6);
     backdrop-filter: blur(30px);
@@ -1798,8 +1497,6 @@ function toggleRecording() {
     border: 1px solid rgba(255,255,255,0.1);
 }
 
-<<<<<<< HEAD
-=======
 .video-wrapper {
     display: flex;
     flex-direction: column;
@@ -1826,7 +1523,6 @@ function toggleRecording() {
     color: rgba(255, 255, 255, 0.7);
 }
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 .loading-state-3d { 
   perspective: 800px; 
   text-align: center;
@@ -2027,8 +1723,6 @@ function toggleRecording() {
   transform: rotate(90deg);
 }
 
-<<<<<<< HEAD
-=======
 /* 编辑按钮样式 */
 .header-actions {
   display: flex;
@@ -2155,7 +1849,6 @@ function toggleRecording() {
   font-size: 13px;
 }
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 .empty-history {
   text-align: center;
   padding: 60px 20px;
@@ -2237,550 +1930,6 @@ function toggleRecording() {
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 4px;
-<<<<<<< HEAD
-}
-
-.tag {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.tag-analysis {
-  background: rgba(168, 85, 247, 0.15);
-  color: var(--neon-purple);
-}
-
-.tag-image {
-  background: rgba(236, 72, 153, 0.15);
-  color: var(--neon-pink);
-}
-
-.delete-btn {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  flex-shrink: 0;
-  padding: 0;
-  margin: 0;
-  opacity: 0;
-}
-
-.history-item-sidebar:hover .delete-btn {
-  opacity: 1;
-}
-
-.delete-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  transform: scale(1.1);
-}
-
-.delete-btn {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  flex-shrink: 0;
-  padding: 0;
-  margin: 0;
-  opacity: 0;
-}
-
-.history-item-sidebar:hover .delete-btn {
-  opacity: 1;
-}
-
-.delete-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  transform: scale(1.1);
-}
-
-/* 主内容区域 */
-.main-content {
-  flex: 1;
-  margin-left: 0;
-  transition: margin-left 0.3s ease;
-  min-height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  width: 100%;
-  position: relative;
-  /* 确保主内容区域的滚动不影响侧边栏 */
-  z-index: 1;
-}
-
-.main-content.sidebar-open {
-  margin-left: 260px;
-  width: calc(100% - 260px);
-}
-
-.sidebar-container.collapsed + .main-content.sidebar-open {
-  margin-left: 60px;
-  width: calc(100% - 60px);
-}
-
-/* 详情内容在主内容区域 */
-.detail-content-main {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 40px 20px;
-}
-
-.detail-header-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-
-.detail-header-main h2 {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.8rem;
-  margin: 0;
-  color: #fff;
-  text-shadow: 0 0 10px var(--neon-purple);
-}
-
-.detail-content-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-
-.detail-header h3 {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.2rem;
-  margin: 0;
-  color: #fff;
-  text-shadow: 0 0 10px var(--neon-purple);
-}
-
-.detail-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.detail-section {
-  margin-bottom: 25px;
-  padding-bottom: 20px;
-  border-bottom: 1px dashed rgba(255,255,255,0.1);
-}
-
-.detail-section:last-child {
-  border-bottom: none;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.detail-section h4 {
-  font-family: 'Orbitron', sans-serif;
-  color: var(--neon-cyan);
-  font-size: 1rem;
-  margin: 0 0 15px 0;
-  letter-spacing: 1px;
-  text-shadow: 0 0 8px var(--neon-cyan);
-}
-
-.detail-section p {
-  color: #e2e8f0;
-  line-height: 1.8;
-  margin: 0;
-  text-align: justify;
-}
-
-.analysis-grid {
-  display: grid;
-  gap: 15px;
-}
-
-.analysis-item {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 12px;
-  background: rgba(0,0,0,0.3);
-  border-left: 3px solid var(--neon-purple);
-  border-radius: 8px;
-}
-
-.analysis-label {
-  font-family: 'Orbitron', sans-serif;
-  color: #94a3b8;
-  font-size: 0.8rem;
-  letter-spacing: 1px;
-}
-
-.analysis-value {
-  color: #e2e8f0;
-  font-size: 0.95rem;
-}
-
-.prompt-text {
-  font-family: 'Courier New', monospace;
-  color: #a5f3fc;
-  background: rgba(6, 182, 212, 0.05);
-  padding: 15px;
-  border-radius: 8px;
-  border-left: 3px solid var(--neon-cyan);
-}
-
-.detail-image-section {
-  border-bottom: 2px solid rgba(168, 85, 247, 0.3);
-  padding-bottom: 25px;
-  margin-bottom: 25px;
-}
-
-.detail-image-section h4 {
-  color: var(--neon-pink);
-  text-shadow: 0 0 10px var(--neon-pink);
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-}
-
-.detail-image-wrapper {
-  margin-top: 15px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 2px solid rgba(168, 85, 247, 0.3);
-  box-shadow: 0 10px 40px rgba(168, 85, 247, 0.4), 0 0 30px rgba(236, 72, 153, 0.3);
-  transition: 0.3s;
-}
-
-.detail-image-wrapper:hover {
-  border-color: var(--neon-pink);
-  box-shadow: 0 15px 50px rgba(168, 85, 247, 0.6), 0 0 40px rgba(236, 72, 153, 0.5);
-  transform: scale(1.02);
-}
-
-.detail-image {
-  width: 100%;
-  height: auto;
-  display: block;
-  transition: 0.3s;
-}
-
-.detail-footer {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid rgba(255,255,255,0.1);
-  text-align: center;
-}
-
-.detail-date {
-  color: #94a3b8;
-  font-size: 0.85rem;
-}
-
-/* 动画 */
-.slide-sidebar-enter-active,
-.slide-sidebar-leave-active {
-  transition: transform 0.3s ease;
-}
-
-.slide-sidebar-enter-from {
-  transform: translateX(-100%);
-}
-
-.slide-sidebar-leave-to {
-  transform: translateX(-100%);
-}
-
-.slide-detail-enter-active,
-.slide-detail-leave-active {
-  transition: transform 0.3s ease;
-}
-
-.slide-detail-enter-from {
-  transform: translateX(100%);
-}
-
-.slide-detail-leave-to {
-  transform: translateX(100%);
-}
-
-@media (max-width: 768px) {
-  .glitch-title { font-size: 2.8rem; }
-  .dashboard-grid { grid-template-columns: 1fr; }
-  .control-deck, .action-module { flex-direction: column; align-items: stretch; }
-  .cyber-btn { width: 100%; }
-  .dream-universe-ui.sidebar-open,
-  .dream-universe-ui.detail-open,
-  .dream-universe-ui.sidebar-open.detail-open { 
-    margin-left: 0;
-    margin-right: 0;
-  }
-  .history-sidebar { width: 100%; }
-  .detail-panel { width: 100%; }
-  .score-cards { grid-template-columns: 1fr; }
-}
-
-.entry-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--neon-purple);
-  flex-shrink: 0;
-}
-
-.comprehensive-controls {
-  padding: 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  background: rgba(0,0,0,0.2);
-  flex-shrink: 0;
-}
-
-.selection-info {
-  color: #8e8ea0;
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-
-.control-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.analyze-btn,
-.clear-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.05);
-  color: #fff;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
-}
-
-.analyze-btn {
-  background: rgba(168, 85, 247, 0.2);
-  border-color: var(--neon-purple);
-}
-
-.analyze-btn:hover:not(:disabled) {
-  background: rgba(168, 85, 247, 0.3);
-  transform: translateY(-1px);
-}
-
-.analyze-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.clear-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,0.1);
-}
-
-.clear-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.comprehensive-deck {
-  margin-top: 40px;
-}
-
-.comprehensive-content {
-  display: flex;
-  flex-direction: column;
-  gap: 30px;
-}
-
-.score-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-}
-
-.score-card {
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-}
-
-.score-card.overall {
-  border-left: 3px solid var(--neon-purple);
-}
-
-.score-card.sleep {
-  border-left: 3px solid var(--neon-cyan);
-}
-
-.score-card.emotion {
-  border-left: 3px solid var(--neon-pink);
-}
-
-.score-label {
-  color: #94a3b8;
-  font-size: 0.9rem;
-  margin-bottom: 10px;
-}
-
-.score-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 15px;
-}
-
-.score-bar {
-  width: 100%;
-  height: 8px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.score-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--neon-purple), var(--neon-cyan));
-  transition: width 1s ease;
-}
-
-.sleep-fill {
-  background: linear-gradient(90deg, var(--neon-cyan), #06b6d4);
-}
-
-.emotion-fill {
-  background: linear-gradient(90deg, var(--neon-pink), #ec4899);
-}
-
-.analysis-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
-}
-
-.analysis-section {
-  background: rgba(0,0,0,0.3);
-  border-left: 3px solid var(--neon-cyan);
-  padding: 20px;
-  border-radius: 8px;
-}
-
-.analysis-section h4 {
-  font-family: 'Orbitron', sans-serif;
-  color: var(--neon-cyan);
-  font-size: 1rem;
-  margin: 0 0 15px 0;
-  letter-spacing: 1px;
-}
-
-.analysis-section p {
-  color: #e2e8f0;
-  line-height: 1.8;
-  margin: 0;
-}
-
-.emotion-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.emotion-tag {
-  padding: 6px 12px;
-  background: rgba(168, 85, 247, 0.2);
-  border: 1px solid var(--neon-purple);
-  border-radius: 16px;
-  color: #fff;
-  font-size: 0.85rem;
-}
-
-.suggestions-list {
-  margin: 0;
-  padding-left: 20px;
-  color: #e2e8f0;
-  line-height: 1.8;
-}
-
-.suggestions-list li {
-  margin-bottom: 8px;
-}
-
-.dream-input-wrapper {
-  position: relative;
-}
-
-.voice-btn {
-  margin-top: 8px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  background: rgba(120, 120, 255, 0.15);
-  color: #bfc8ff;
-  transition: all 0.3s ease;
-}
-
-.voice-btn:hover {
-  background: rgba(120, 120, 255, 0.3);
-}
-
-.voice-btn.recording {
-  background: rgba(255, 80, 80, 0.25);
-  color: #ffb3b3;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.5); }
-  70% { box-shadow: 0 0 0 10px rgba(255, 80, 80, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0); }
-}
-
-.voice-tip {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #999;
-}
-
-=======
 }
 
 .tag {
@@ -3345,6 +2494,5 @@ function toggleRecording() {
 .suggestions-list li {
   margin-bottom: 8px;
 }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 </style>
 
