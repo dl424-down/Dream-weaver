@@ -479,6 +479,20 @@ function formatDate(dateString) {
   }
 }
 
+
+// ======================
+// 🎤 语音输入模块（浏览器原生 Speech Recognition）
+// ======================
+
+onMounted(() => {
+  // 检查浏览器是否支持语音识别
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  
+  if (!SpeechRecognition) {
+    speechSupported.value = false
+    console.warn("当前浏览器不支持语音识别")
+    return
+  }
   
   speechSupported.value = true
   
