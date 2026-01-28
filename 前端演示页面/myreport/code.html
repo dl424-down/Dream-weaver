@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dream Weaver - Responsive Dream Reports Archive</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#ffffff",
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    backgroundImage: {
+                        'starry': "url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?ixlib=rb-4.0.3&auto=format&fit=crop&w=2342&q=80')",
+                    }
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.12);
+            --glass-bg-strong: rgba(255, 255, 255, 0.22);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glow-white: 0 0 15px rgba(255, 255, 255, 0.3);
+            --glow-white-strong: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        body {
+            background-color: #05070a;
+            color: white;
+        }
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glow-white);
+        }
+        .glass-card-strong {
+            background: var(--glass-bg-strong);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow: var(--glow-white);
+        }
+        .sidebar-item-active {
+            background: rgba(255, 255, 255, 0.15);
+            border: 3px solid rgba(255, 255, 255, 1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+        .mobile-nav-active {
+            color: white;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+        .glow-border {
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+        .glow-text {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .aspect-dream {
+            aspect-ratio: 16/9;
+        }
+        @media (max-width: 768px) {
+            .glass-card-strong {
+                border-width: 1px;
+            }
+            .sidebar-item-active {
+                border-width: 0;
+                box-shadow: none;
+                background: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-starry bg-cover bg-fixed bg-center min-h-screen">
+<div class="flex flex-col md:flex-row h-screen overflow-hidden backdrop-brightness-[0.4]">
+<aside class="hidden md:flex w-72 bg-black/40 backdrop-blur-2xl border-r border-white/20 flex-col p-8 z-30">
+<div class="flex items-center gap-3 mb-16 px-2">
+<div class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.6)]">
+<span class="material-symbols-outlined text-black text-2xl font-bold">auto_awesome</span>
+</div>
+<span class="text-2xl font-bold tracking-tight glow-text">Dream Weaver</span>
+</div>
+<nav class="flex-1 space-y-4">
+<a class="flex items-center gap-4 px-5 py-4 rounded-2xl text-white/70 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span class="font-medium">梦境分析</span>
+</a>
+<a class="flex items-center gap-4 px-5 py-4 rounded-2xl text-white/70 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">monitor_heart</span>
+<span class="font-medium">生理数据</span>
+</a>
+<a class="flex items-center gap-4 px-5 py-4 rounded-2xl text-white/70 hover:text-white hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="font-medium">脑电波分析</span>
+</a>
+<a class="flex items-center gap-4 px-5 py-4 rounded-2xl text-white sidebar-item-active transition-all" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-medium">我的报告</span>
+</a>
+</nav>
+<div class="mt-auto pt-8 border-t border-white/10">
+<p class="text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4 px-2">System Theme</p>
+<div class="flex bg-black/40 rounded-full p-1.5 border border-white/20">
+<button class="flex-1 flex justify-center py-2 rounded-full text-white/50 hover:text-white"><span class="material-symbols-outlined text-xl">dark_mode</span></button>
+<button class="flex-1 flex justify-center py-2 rounded-full bg-white text-black shadow-lg"><span class="material-symbols-outlined text-xl">light_mode</span></button>
+</div>
+</div>
+</aside>
+<nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/20 px-6 py-3 flex justify-between items-center rounded-t-3xl">
+<a class="flex flex-col items-center gap-1 text-white/50" href="#">
+<span class="material-symbols-outlined text-2xl">psychology</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-white/50" href="#">
+<span class="material-symbols-outlined text-2xl">monitor_heart</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-white/50" href="#">
+<span class="material-symbols-outlined text-2xl">insights</span>
+</a>
+<a class="flex flex-col items-center gap-1 mobile-nav-active" href="#">
+<span class="material-symbols-outlined text-2xl">description</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-white/50" href="#">
+<span class="material-symbols-outlined text-2xl">settings</span>
+</a>
+</nav>
+<main class="flex-1 overflow-y-auto p-6 md:p-12 relative pb-24 md:pb-12">
+<div class="max-w-7xl mx-auto space-y-8 md:space-y-12">
+<header>
+<h1 class="text-3xl md:text-5xl font-light tracking-[0.1em] md:tracking-[0.15em] glow-text">我的梦境报告</h1>
+<p class="text-xs md:text-sm text-white/50 mt-2 md:mt-4 uppercase tracking-[0.2em] md:tracking-[0.4em]">User Dream Reports Archive</p>
+</header>
+<div class="flex flex-col md:flex-row gap-4 items-center justify-between glass-panel p-3 md:p-4 rounded-2xl glow-border">
+<div class="relative w-full md:w-96">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/40">search</span>
+<input class="w-full bg-white/5 border border-white/20 rounded-xl py-2 md:py-2.5 pl-12 pr-4 text-sm focus:outline-none focus:border-white/60 transition-colors placeholder:text-white/30" placeholder="搜索梦境关键词..." type="text"/>
+</div>
+<div class="hidden md:flex gap-3 w-full md:w-auto">
+<button class="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-sm hover:bg-white/10 transition-colors glow-border">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+                        按日期
+                    </button>
+<button class="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-sm hover:bg-white/10 transition-colors glow-border">
+<span class="material-symbols-outlined text-sm">mood</span>
+                        按情绪
+                    </button>
+<div class="h-10 w-[1px] bg-white/10 mx-2"></div>
+<button class="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/40 rounded-xl glow-border">
+<span class="material-symbols-outlined">grid_view</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl">
+<span class="material-symbols-outlined">list</span>
+</button>
+</div>
+<div class="flex md:hidden w-full gap-2">
+<button class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-sm glow-border">
+<span class="material-symbols-outlined text-lg">filter_list</span>
+                        筛选选项
+                    </button>
+<button class="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/20 rounded-xl">
+<span class="material-symbols-outlined">sort</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+<div class="glass-card-strong rounded-3xl md:rounded-[2rem] overflow-hidden flex flex-col group transition-transform hover:-translate-y-1">
+<div class="aspect-dream bg-white/5 relative overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-5xl text-white/20">bubble_chart</span>
+</div>
+<div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full text-[10px] tracking-widest uppercase">
+                            Visualized
+                        </div>
+</div>
+<div class="p-6 md:p-8 space-y-4 flex-1 flex flex-col">
+<div class="flex justify-between items-start">
+<span class="text-[10px] md:text-[11px] text-white/60 font-medium tracking-tighter uppercase">2023.10.24 • 03:45 AM</span>
+<span class="material-symbols-outlined text-emerald-400 text-sm">sentiment_very_satisfied</span>
+</div>
+<h3 class="text-lg md:text-xl font-semibold glow-text group-hover:text-white transition-colors">霓虹之都的飞翔</h3>
+<p class="text-sm text-white/50 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                            我梦见自己在充满了赛博朋克风格的巨大都市中穿梭。建筑物的霓虹灯在雨水中反射，重力似乎消失了...
+                        </p>
+<div class="pt-2 md:pt-4 mt-auto">
+<button class="w-full py-2.5 md:py-3 rounded-xl border border-white/40 bg-white/10 text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all glow-border">
+                                Read More
+                            </button>
+</div>
+</div>
+</div>
+<div class="glass-card-strong rounded-3xl md:rounded-[2rem] overflow-hidden flex flex-col group transition-transform hover:-translate-y-1">
+<div class="aspect-dream bg-white/5 relative overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-5xl text-white/20">waves</span>
+</div>
+<div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full text-[10px] tracking-widest uppercase text-white/60">
+                            Processing
+                        </div>
+</div>
+<div class="p-6 md:p-8 space-y-4 flex-1 flex flex-col">
+<div class="flex justify-between items-start">
+<span class="text-[10px] md:text-[11px] text-white/60 font-medium tracking-tighter uppercase">2023.10.22 • 01:12 AM</span>
+<span class="material-symbols-outlined text-blue-300 text-sm">water_drop</span>
+</div>
+<h3 class="text-lg md:text-xl font-semibold glow-text">深海的寂静图书馆</h3>
+<p class="text-sm text-white/50 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                            在巨大的深海气泡中，我发现了一座存放着无数发光书籍的图书馆。成群的发光鱼类在书架间穿梭...
+                        </p>
+<div class="pt-2 md:pt-4 mt-auto">
+<button class="w-full py-2.5 md:py-3 rounded-xl border border-white/40 bg-white/10 text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all glow-border">
+                                Read More
+                            </button>
+</div>
+</div>
+</div>
+<div class="glass-card-strong rounded-3xl md:rounded-[2rem] overflow-hidden flex flex-col group transition-transform hover:-translate-y-1">
+<div class="aspect-dream bg-white/5 relative overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-5xl text-white/20">landscape</span>
+</div>
+<div class="absolute top-4 right-4 bg-black/40 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full text-[10px] tracking-widest uppercase">
+                            Visualized
+                        </div>
+</div>
+<div class="p-6 md:p-8 space-y-4 flex-1 flex flex-col">
+<div class="flex justify-between items-start">
+<span class="text-[10px] md:text-[11px] text-white/60 font-medium tracking-tighter uppercase">2023.10.20 • 05:20 AM</span>
+<span class="material-symbols-outlined text-amber-300 text-sm">wb_sunny</span>
+</div>
+<h3 class="text-lg md:text-xl font-semibold glow-text">时钟森林的日出</h3>
+<p class="text-sm text-white/50 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                            森林里的树木都是巨大的钟表机构，随着滴答声而生长。当三个太阳同时升起时，所有的钟表开始反向走动...
+                        </p>
+<div class="pt-2 md:pt-4 mt-auto">
+<button class="w-full py-2.5 md:py-3 rounded-xl border border-white/40 bg-white/10 text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all glow-border">
+                                Read More
+                            </button>
+</div>
+</div>
+</div>
+<div class="glass-card-strong rounded-3xl md:rounded-[2rem] overflow-hidden flex flex-col group transition-transform hover:-translate-y-1">
+<div class="aspect-dream bg-white/5 relative overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-5xl text-white/20">schema</span>
+</div>
+</div>
+<div class="p-6 md:p-8 space-y-4 flex-1 flex flex-col">
+<div class="flex justify-between items-start">
+<span class="text-[10px] md:text-[11px] text-white/60 font-medium tracking-tighter uppercase">2023.10.18 • 02:30 AM</span>
+<span class="material-symbols-outlined text-purple-400 text-sm">auto_fix_normal</span>
+</div>
+<h3 class="text-lg md:text-xl font-semibold glow-text">几何碎片的迷宫</h3>
+<p class="text-sm text-white/50 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                            一个没有尽头的白色空间，充满了漂浮的几何形状。我需要通过旋转这些形状来拼凑出离开的阶梯...
+                        </p>
+<div class="pt-2 md:pt-4 mt-auto">
+<button class="w-full py-2.5 md:py-3 rounded-xl border border-white/40 bg-white/10 text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all glow-border">
+                                Read More
+                            </button>
+</div>
+</div>
+</div>
+<div class="glass-card-strong rounded-3xl md:rounded-[2rem] overflow-hidden flex flex-col group transition-transform hover:-translate-y-1">
+<div class="aspect-dream bg-white/5 relative overflow-hidden">
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-5xl text-white/20">cloud</span>
+</div>
+</div>
+<div class="p-6 md:p-8 space-y-4 flex-1 flex flex-col">
+<div class="flex justify-between items-start">
+<span class="text-[10px] md:text-[11px] text-white/60 font-medium tracking-tighter uppercase">2023.10.15 • 04:05 AM</span>
+<span class="material-symbols-outlined text-gray-400 text-sm">bedtime</span>
+</div>
+<h3 class="text-lg md:text-xl font-semibold glow-text">云端列车</h3>
+<p class="text-sm text-white/50 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                            坐在一列由云彩构成的透明列车上，乘客都是半透明的人影。列车不经过车站，而是穿过巨大的漂浮岛屿...
+                        </p>
+<div class="pt-2 md:pt-4 mt-auto">
+<button class="w-full py-2.5 md:py-3 rounded-xl border border-white/40 bg-white/10 text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all glow-border">
+                                Read More
+                            </button>
+</div>
+</div>
+</div>
+<div class="glass-panel rounded-3xl md:rounded-[2rem] border-dashed border-2 border-white/20 flex flex-col items-center justify-center p-8 min-h-[300px] md:min-h-[400px] hover:bg-white/5 transition-all cursor-pointer group">
+<div class="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-2xl md:text-3xl text-white/40 group-hover:text-white transition-colors">add</span>
+</div>
+<span class="text-[10px] md:text-sm text-white/40 font-medium tracking-widest group-hover:text-white transition-colors uppercase">Upload Manual Record</span>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>

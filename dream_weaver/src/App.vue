@@ -1,7 +1,6 @@
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import * as THREE from 'three'
+import { ref, computed, onMounted, nextTick } from 'vue'
 
 // --- 业务逻辑状态 ---
 const dreamText = ref('')
@@ -11,7 +10,6 @@ const loadingImage = ref(false)
 const result = ref(null)
 const generatedImage = ref(null)
 const error = ref('')
-const canvasRef = ref(null) // 3D 画布引用
 const historyVisible = ref(false)
 const historyLoading = ref(false)
 const historyEntries = ref([])
@@ -23,8 +21,6 @@ const selectedEntryIds = ref(new Set()) // 存储选中的记录ID（用于综�
 const comprehensiveAnalysis = ref(null) // 综合分析结果
 const analyzing = ref(false) // 是否正在分析
 const lastEntryId = ref(null) // 最近一次分析生成的记录ID，用于绑定生成的图片
-<<<<<<< HEAD
-=======
 const generatedVideo = ref(null) // 生成的视频
 const loadingVideo = ref(false) // 是否正在生成视频
 const videoDuration = ref(5) // 视频时长（秒）
@@ -40,7 +36,6 @@ let recognition = null // 语音识别对象
 const isEditing = ref(false) // 是否处于编辑模式
 const editingText = ref('') // 编辑中的文本内容
 const isUpdating = ref(false) // 是否正在更新
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 
 const fileName = computed(() => imageFile.value ? imageFile.value.name : '')
 
@@ -99,18 +94,6 @@ async function analyzeTextOnly() {
   }
 }
 
-<<<<<<< HEAD
-async function generateImage() {
-  if (checkEmpty()) return
-  error.value = ''
-  generatedImage.value = null
-  loadingImage.value = true
-  
-  const form = new FormData()
-  form.append('dream_text', dreamText.value)
-  if (lastEntryId.value) {
-    form.append('entry_id', String(lastEntryId.value))
-=======
 async function generateImage(entryId = null, dreamTextValue = null) {
   // 如果从详情页调用，使用传入的参数；否则使用主界面的输入
   const textToUse = dreamTextValue || dreamText.value
@@ -119,7 +102,7 @@ async function generateImage(entryId = null, dreamTextValue = null) {
   if (!textToUse && !entryIdToUse) {
     if (!entryId) {
       // 主界面调用，需要检查输入
-      if (checkEmpty()) return
+  if (checkEmpty()) return
     }
     error.value = '请先输入梦境内容或选择一条记录'
     return
@@ -137,7 +120,6 @@ async function generateImage(entryId = null, dreamTextValue = null) {
   form.append('dream_text', textToUse)
   if (entryIdToUse) {
     form.append('entry_id', String(entryIdToUse))
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
   }
   
   try {
@@ -145,14 +127,6 @@ async function generateImage(entryId = null, dreamTextValue = null) {
     if (!resp.ok) throw new Error('图像具象化失败')
     const j = await resp.json()
     if (j && j.image) {
-<<<<<<< HEAD
-      generatedImage.value = j.image
-      // 如果后端返回了 entry_id，则更新 lastEntryId（防止前端状态不同步）
-      if (j.entry_id) {
-        lastEntryId.value = j.entry_id
-      }
-      scrollTo('image-section')
-=======
       // 如果是从详情页生成的，更新详情页的图片
       if (entryIdToUse && selectedEntry.value && selectedEntry.value.id === entryIdToUse) {
         selectedEntry.value.image_url = j.image
@@ -160,14 +134,13 @@ async function generateImage(entryId = null, dreamTextValue = null) {
         await loadEntryDetail(entryIdToUse)
       } else {
         // 主界面生成图片
-        generatedImage.value = j.image
+      generatedImage.value = j.image
         scrollTo('image-section')
       }
       // 如果后端返回了 entry_id，则更新 lastEntryId
       if (j.entry_id) {
         lastEntryId.value = j.entry_id
       }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
     } else {
       throw new Error(j?.message || '虚空未返回图像')
     }
@@ -199,12 +172,6 @@ function resetState() {
   lastEntryId.value = null
 }
 
-<<<<<<< HEAD
-async function loadHistory() {
-  historyLoading.value = true
-  historyVisible.value = true
-  selectedEntry.value = null
-=======
 async function generateVideo() {
   if (checkEmpty()) return
   error.value = ''
@@ -245,17 +212,14 @@ async function loadHistory(clearSelection = false) {
   historyVisible.value = true
   // 只有在明确要求清除选择时才清空选中的详情
   if (clearSelection) {
-    selectedEntry.value = null
+  selectedEntry.value = null
   }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
   try {
     const resp = await fetch('http://localhost:8000/dreams/history?limit=20')
     if (!resp.ok) throw new Error('获取历史记录失败')
     const data = await resp.json()
     if (data.success) {
       historyEntries.value = data.entries || []
-<<<<<<< HEAD
-=======
       // 如果当前有选中的详情，更新它（如果列表中有对应的记录）
       if (selectedEntry.value && !clearSelection) {
         const updatedEntry = data.entries.find(e => e.id === selectedEntry.value.id)
@@ -264,7 +228,6 @@ async function loadHistory(clearSelection = false) {
           // selectedEntry 的完整数据会在需要时重新加载
         }
       }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
     } else {
       error.value = data.error || '获取历史记录失败'
     }
@@ -277,13 +240,10 @@ async function loadHistory(clearSelection = false) {
 
 async function loadEntryDetail(entryId) {
   detailLoading.value = true
-<<<<<<< HEAD
-=======
   // 退出编辑模式（如果正在编辑）
   if (isEditing.value) {
     cancelEdit()
   }
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
   try {
     const resp = await fetch(`http://localhost:8000/dreams/${entryId}`)
     if (!resp.ok) throw new Error('获取详情失败')
@@ -300,8 +260,6 @@ async function loadEntryDetail(entryId) {
   }
 }
 
-<<<<<<< HEAD
-=======
 // 进入编辑模式
 function startEdit() {
   if (!selectedEntry.value) return
@@ -393,17 +351,12 @@ async function saveEdit() {
   }
 }
 
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 function toggleSidebar() {
   historyVisible.value = !historyVisible.value
   if (!historyVisible.value) {
     selectedEntry.value = null
   } else if (historyEntries.value.length === 0) {
-<<<<<<< HEAD
-    loadHistory()
-=======
     loadHistory(true)  // 打开侧边栏时，清空选中的详情
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
   }
 }
 
@@ -526,6 +479,7 @@ function formatDate(dateString) {
   }
 }
 
+<<<<<<< HEAD
 // --- Three.js 3D 场景逻辑 ---
 let scene, camera, renderer, particles, starField
 let mouseX = 0, mouseY = 0
@@ -687,6 +641,8 @@ function animate() {
 }
 <<<<<<< HEAD
 =======
+=======
+>>>>>>> b8febb229b35541fc801139fe81e0b2667554f61
 
 >>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
 // ======================
@@ -821,8 +777,6 @@ function toggleRecording() {
 </script>
 
 <template>
-  <canvas ref="canvasRef" class="webgl-bg"></canvas>
-
   <div class="dream-universe-ui">
     <!-- 侧边栏 -->
     <div class="sidebar-container" :class="{ 'collapsed': sidebarCollapsed, 'visible': historyVisible }">
@@ -1036,7 +990,7 @@ function toggleRecording() {
 =======
             <div class="detail-section detail-image-section">
               <div class="image-section-header">
-                <h4>梦境重现</h4>
+              <h4>梦境重现</h4>
                 <button 
                   class="regenerate-image-btn" 
                   @click="generateImage(selectedEntry.id, selectedEntry.dream_text)"
