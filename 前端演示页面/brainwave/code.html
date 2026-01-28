@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dream Weaver - 脑电波分析</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#ffffff",
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    backgroundImage: {
+                        'starry': "url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?ixlib=rb-4.0.3&auto=format&fit=crop&w=2342&q=80')",
+                    }
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        :root {
+            --glass-bg-strong: rgba(255, 255, 255, 0.22);
+            --glass-border-glow: rgba(255, 255, 255, 0.8);
+            --glow-white: 0 0 15px rgba(255, 255, 255, 0.4);
+        }
+        body {
+            background-color: #05070a;
+            color: white;
+        }
+        .glass-card-strong {
+            background: var(--glass-bg-strong);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1.5px solid var(--glass-border-glow);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+        .sidebar-item-active {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+        .mobile-nav-item-active {
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+        .glow-text {
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .radar-line {
+            stroke: rgba(255, 255, 255, 0.6);
+            stroke-dasharray: 4;
+        }
+        .chart-line-glow {
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+        }
+        @media (max-width: 768px) {
+            .glass-card-strong {
+                border-width: 1px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-starry bg-cover bg-fixed bg-center min-h-screen">
+<div class="flex flex-col md:flex-row h-screen overflow-hidden backdrop-brightness-[0.4]">
+<aside class="hidden md:flex w-72 bg-black/40 backdrop-blur-2xl border-r border-white/20 flex-col p-8 z-30">
+<div class="flex items-center gap-3 mb-16 px-2">
+<div class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.6)]">
+<span class="material-symbols-outlined text-black font-bold">auto_awesome</span>
+</div>
+<span class="text-xl font-semibold tracking-tight">Dream Weaver</span>
+</div>
+<nav class="flex-1 space-y-4">
+<a class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/60 hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span class="font-medium">梦境分析</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/60 hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined">monitor_heart</span>
+<span class="font-medium">生理数据</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-white sidebar-item-active transition-all" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="font-medium">脑电波分析</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/60 hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-medium">我的报告</span>
+</a>
+</nav>
+<div class="mt-auto pt-8 border-t border-white/10">
+<div class="px-2">
+<p class="text-[10px] uppercase tracking-widest text-white/40 mb-4">主题设置</p>
+<div class="flex bg-black/40 rounded-full p-1 border border-white/20">
+<button class="flex-1 flex justify-center py-2 rounded-full"><span class="material-symbols-outlined text-sm">dark_mode</span></button>
+<button class="flex-1 flex justify-center py-2 rounded-full bg-white text-black shadow-lg"><span class="material-symbols-outlined text-sm">light_mode</span></button>
+</div>
+</div>
+</div>
+</aside>
+<main class="flex-1 overflow-y-auto p-4 md:p-10 relative pb-24 md:pb-10">
+<div class="max-w-7xl mx-auto space-y-6 md:space-y-10">
+<header class="mb-8 md:mb-12">
+<h1 class="text-3xl md:text-5xl font-light tracking-[0.1em] md:tracking-[0.2em] glow-text text-white">脑电波深度解析</h1>
+<p class="text-[10px] md:text-xs text-white/60 mt-2 md:mt-4 uppercase tracking-[0.2em] md:tracking-[0.4em]">BRAINWAVE PATTERN ANALYSIS</p>
+</header>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+<div class="glass-card-strong rounded-2xl md:rounded-3xl p-4 md:p-6">
+<div class="flex justify-between items-start mb-3 md:mb-4">
+<h3 class="text-[10px] md:text-sm font-semibold tracking-wider text-white/80">ALPHA波</h3>
+<span class="text-[8px] md:text-[10px] px-1.5 py-0.5 md:px-2 md:py-1 bg-white/10 rounded-full border border-white/20">放松</span>
+</div>
+<div class="flex items-baseline gap-1 md:gap-2 mb-3 md:mb-4">
+<span class="text-xl md:text-3xl font-bold">18.4</span>
+<span class="text-[10px] text-white/50">µV²</span>
+</div>
+<div class="h-8 md:h-10 flex items-end gap-1">
+<div class="w-full bg-white/20 h-2/5 rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/5 rounded-sm"></div>
+<div class="w-full bg-white/40 h-4/5 rounded-sm shadow-[0_0_8px_rgba(255,255,255,0.3)]"></div>
+<div class="w-full bg-white/20 h-2/4 rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/4 rounded-sm"></div>
+</div>
+</div>
+<div class="glass-card-strong rounded-2xl md:rounded-3xl p-4 md:p-6">
+<div class="flex justify-between items-start mb-3 md:mb-4">
+<h3 class="text-[10px] md:text-sm font-semibold tracking-wider text-white/80">BETA波</h3>
+<span class="text-[8px] md:text-[10px] px-1.5 py-0.5 md:px-2 md:py-1 bg-white/10 rounded-full border border-white/20">活跃</span>
+</div>
+<div class="flex items-baseline gap-1 md:gap-2 mb-3 md:mb-4">
+<span class="text-xl md:text-3xl font-bold">12.1</span>
+<span class="text-[10px] text-white/50">µV²</span>
+</div>
+<div class="h-8 md:h-10 flex items-end gap-1">
+<div class="w-full bg-white/20 h-3/4 rounded-sm"></div>
+<div class="w-full bg-white/40 h-2/5 rounded-sm shadow-[0_0_8px_rgba(255,255,255,0.3)]"></div>
+<div class="w-full bg-white/20 h-2/4 rounded-sm"></div>
+<div class="w-full bg-white/20 h-full rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/5 rounded-sm"></div>
+</div>
+</div>
+<div class="glass-card-strong rounded-2xl md:rounded-3xl p-4 md:p-6">
+<div class="flex justify-between items-start mb-3 md:mb-4">
+<h3 class="text-[10px] md:text-sm font-semibold tracking-wider text-white/80">THETA波</h3>
+<span class="text-[8px] md:text-[10px] px-1.5 py-0.5 md:px-2 md:py-1 bg-white/10 rounded-full border border-white/20">深度</span>
+</div>
+<div class="flex items-baseline gap-1 md:gap-2 mb-3 md:mb-4">
+<span class="text-xl md:text-3xl font-bold">32.8</span>
+<span class="text-[10px] text-white/50">µV²</span>
+</div>
+<div class="h-8 md:h-10 flex items-end gap-1">
+<div class="w-full bg-white/20 h-2/4 rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/4 rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/5 rounded-sm"></div>
+<div class="w-full bg-white/40 h-full rounded-sm shadow-[0_0_8px_rgba(255,255,255,0.3)]"></div>
+<div class="w-full bg-white/20 h-4/5 rounded-sm"></div>
+</div>
+</div>
+<div class="glass-card-strong rounded-2xl md:rounded-3xl p-4 md:p-6">
+<div class="flex justify-between items-start mb-3 md:mb-4">
+<h3 class="text-[10px] md:text-sm font-semibold tracking-wider text-white/80">DELTA波</h3>
+<span class="text-[8px] md:text-[10px] px-1.5 py-0.5 md:px-2 md:py-1 bg-white/10 rounded-full border border-white/20">睡眠</span>
+</div>
+<div class="flex items-baseline gap-1 md:gap-2 mb-3 md:mb-4">
+<span class="text-xl md:text-3xl font-bold">45.2</span>
+<span class="text-[10px] text-white/50">µV²</span>
+</div>
+<div class="h-8 md:h-10 flex items-end gap-1">
+<div class="w-full bg-white/40 h-full rounded-sm shadow-[0_0_8px_rgba(255,255,255,0.3)]"></div>
+<div class="w-full bg-white/20 h-4/5 rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/5 rounded-sm"></div>
+<div class="w-full bg-white/20 h-full rounded-sm"></div>
+<div class="w-full bg-white/20 h-3/4 rounded-sm"></div>
+</div>
+</div>
+</div>
+<div class="glass-card-strong rounded-3xl md:rounded-[3rem] p-6 md:p-10">
+<div class="flex flex-col lg:grid lg:grid-cols-2 gap-8 md:gap-12">
+<div class="w-full">
+<div class="mb-6 md:mb-8">
+<h2 class="text-xl md:text-2xl font-light tracking-wide">频率分布图</h2>
+<p class="text-[10px] md:text-xs text-white/50 mt-1">实时波段主导分布</p>
+</div>
+<div class="relative w-full max-w-[320px] mx-auto aspect-square flex items-center justify-center">
+<svg class="w-full h-full overflow-visible p-8" viewBox="0 0 100 100">
+<polygon class="radar-line" fill="none" points="50,0 97.5,34.5 79.4,90.5 20.6,90.5 2.5,34.5"></polygon>
+<polygon class="radar-line" fill="none" opacity="0.5" points="50,20 88,47.6 73.5,82.4 26.5,82.4 12,47.6"></polygon>
+<polygon class="radar-line" fill="none" opacity="0.3" points="50,40 69,57.3 61.8,71.2 38.2,71.2 31,57.3"></polygon>
+<polygon class="chart-line-glow" fill="rgba(255,255,255,0.2)" points="50,15 90,40 70,85 30,75 15,35" stroke="white" stroke-width="2"></polygon>
+<text fill="white" font-size="4" font-weight="600" text-anchor="middle" x="50" y="-6">ALPHA波</text>
+<text fill="white" font-size="4" font-weight="600" text-anchor="start" x="102" y="35">BETA波</text>
+<text fill="white" font-size="4" font-weight="600" text-anchor="start" x="82" y="98">THETA波</text>
+<text fill="white" font-size="4" font-weight="600" text-anchor="end" x="18" y="98">DELTA波</text>
+<text fill="white" font-size="4" font-weight="600" text-anchor="end" x="-2" y="35">GAMMA波</text>
+</svg>
+</div>
+</div>
+<div class="flex flex-col w-full">
+<div class="mb-6 md:mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-2">
+<div>
+<h2 class="text-xl md:text-2xl font-light tracking-wide">睡眠阶段时间轴</h2>
+<p class="text-[10px] md:text-xs text-white/50 mt-1">神经活动与睡眠图关联</p>
+</div>
+<span class="text-lg md:text-xl font-bold glow-text">快速眼动期 (REM)</span>
+</div>
+<div class="flex-1 relative mt-4 md:mt-10 min-h-[200px] md:min-h-[240px]">
+<div class="absolute inset-0 flex flex-col justify-between py-2 text-[9px] md:text-[10px] text-white/30 tracking-tighter">
+<div class="border-t border-white/10 w-full flex justify-between pt-1"><span>清醒</span></div>
+<div class="border-t border-white/10 w-full flex justify-between pt-1"><span>快速眼动</span></div>
+<div class="border-t border-white/10 w-full flex justify-between pt-1"><span>浅睡</span></div>
+<div class="border-t border-white/10 w-full flex justify-between pt-1"><span>深睡</span></div>
+<div class="border-t border-white/40 w-full"></div>
+</div>
+<svg class="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 500 240">
+<path class="chart-line-glow" d="M0,40 L50,110 L120,180 L200,40 L280,180 L350,40 L420,110 L500,40" fill="none" stroke="white" stroke-width="2.5"></path>
+<circle cx="350" cy="40" fill="white" filter="drop-shadow(0 0 8px white)" r="5"></circle>
+</svg>
+<div class="absolute top-[8%] left-[60%] md:left-[70%] bg-white text-black text-[8px] md:text-[9px] font-bold px-1.5 md:py-1 rounded shadow-xl whitespace-nowrap">当前阶段: REM</div>
+</div>
+<div class="flex justify-between text-[9px] md:text-[10px] text-white/40 mt-6 font-medium">
+<span>23:00</span>
+<span>01:00</span>
+<span>03:00</span>
+<span>05:00</span>
+<span>07:00</span>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+<div class="glass-card-strong rounded-2xl md:rounded-[2rem] p-6 md:p-8 flex items-center justify-between">
+<div class="flex items-center gap-4 md:gap-6">
+<div class="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 shadow-inner shrink-0">
+<span class="material-symbols-outlined text-2xl md:text-3xl">timer</span>
+</div>
+<div>
+<h3 class="text-base md:text-lg font-medium">REM 频率</h3>
+<p class="text-[10px] md:text-xs text-white/50 mt-1">快速眼动期的发生频率</p>
+</div>
+</div>
+<div class="text-right">
+<span class="text-2xl md:text-3xl font-bold glow-text">4.2</span>
+<span class="block text-[8px] md:text-[10px] text-white/40 uppercase tracking-widest mt-1">周期 / 夜</span>
+</div>
+</div>
+<div class="glass-card-strong rounded-2xl md:rounded-[2rem] p-6 md:p-8 flex items-center justify-between">
+<div class="flex items-center gap-4 md:gap-6">
+<div class="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 shadow-inner shrink-0">
+<span class="material-symbols-outlined text-2xl md:text-3xl">verified_user</span>
+</div>
+<div>
+<h3 class="text-base md:text-lg font-medium">深睡稳定性</h3>
+<p class="text-[10px] md:text-xs text-white/50 mt-1">DELTA波形的持续一致性</p>
+</div>
+</div>
+<div class="text-right">
+<span class="text-2xl md:text-3xl font-bold glow-text">92%</span>
+<span class="block text-[8px] md:text-[10px] text-emerald-400 uppercase tracking-widest mt-1">稳定</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-black/60 backdrop-blur-xl border-t border-white/10 px-6 py-3 flex justify-between items-center z-50">
+<a class="flex flex-col items-center gap-1 text-white/40" href="#">
+<span class="material-symbols-outlined text-2xl">psychology</span>
+<span class="text-[10px]">梦境</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-white/40" href="#">
+<span class="material-symbols-outlined text-2xl">monitor_heart</span>
+<span class="text-[10px]">生理</span>
+</a>
+<a class="flex flex-col items-center gap-1 mobile-nav-item-active" href="#">
+<span class="material-symbols-outlined text-2xl">insights</span>
+<span class="text-[10px]">脑电</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-white/40" href="#">
+<span class="material-symbols-outlined text-2xl">description</span>
+<span class="text-[10px]">报告</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-white/40" href="#">
+<span class="material-symbols-outlined text-2xl">settings</span>
+<span class="text-[10px]">设置</span>
+</a>
+</nav>
+</div>
+
+</body></html>
