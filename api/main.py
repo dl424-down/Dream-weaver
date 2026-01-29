@@ -49,11 +49,7 @@ from db.redis_cache import get_cache
 
 init_db()
 
-app = FastAPI(
-    title="Dream Weaver API", 
-    version="1.0.0",
-    description="梦境分析系统API，提供梦境文本和图像的分析功能"
-)
+app = FastAPI(title="Dream Weaver API", version="1.0.0")
 
 # 允许前端本地开发访问
 app.add_middleware(
@@ -67,55 +63,11 @@ app.add_middleware(
 analyzer = DreamAnalyzer()
 cache = get_cache()  # 初始化 Redis 缓存
 
-# 简单的内存存储（生产环境请使用数据库）
-analysis_history = []
 
-@app.get("/health")
-async def health_check():
-    """健康检查接口"""
-    return {
-        "status": "healthy", 
-        "service": "Dream Weaver API",
-        "version": "1.0.0"
-    }
-
-@app.post("/analyze/text")
-async def analyze_text_only(
-    dream_text: str = Form(..., description="梦境文本描述")
-):
-    """仅分析梦境文本，不处理图片"""
-    try:
-        result = analyzer.analyze_dream(dream_text, image_path=None)
-        
-        # 记录到历史
-        analysis_history.append({
-            "dream_text": dream_text,
-            "analysis": result,
-            "timestamp": "刚刚"
-        })
-        
-        return {
-            "success": True,
-            "data": {
-                "emotions": result["core_elements"]["emotions"],
-                "themes": result["core_elements"]["themes"], 
-                "keywords": result["core_elements"]["keywords"],
-                "detailed_analysis": result["detailed_analysis"],
-                "visualization_prompt": result["visualization_prompt"]
-            }
-        }
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
-        )
-
-@app.post("/analyze", 
-          summary="分析梦境",
-          description="根据文本描述和可选图片分析梦境内容，返回情绪、主题、关键词等分析结果")
+@app.post("/analyze")
 async def analyze(
-    dream_text: str = Form(..., description="梦境文本描述"),
-    image: Optional[UploadFile] = File(None, description="可选梦境相关图片")
+    dream_text: str = Form(...),
+    image: Optional[UploadFile] = File(None),
 ):
     image_path = None
     tmp_file = None
@@ -135,35 +87,6 @@ async def analyze(
             saved_image_path = os.path.join(UPLOAD_DIR, saved_name)
             shutil.copy(tmp_file, saved_image_path)
 
-<<<<<<< HEAD
-        result = analyzer.analyze_dream(dream_text, image_path=image_path)
-        
-        # 记录到历史
-        analysis_history.append({
-            "dream_text": dream_text,
-            "analysis": result,
-            "timestamp": "刚刚",
-            "has_image": image is not None
-        })
-        
-        # 返回结构化的响应
-        return {
-            "success": True,
-            "data": {
-                "emotions": result["core_elements"]["emotions"],
-                "themes": result["core_elements"]["themes"],
-                "keywords": result["core_elements"]["keywords"],
-                "detailed_analysis": result["detailed_analysis"],
-                "visualization_prompt": result["visualization_prompt"],
-                "image_caption": result.get("image_caption")
-            }
-        }
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "error": str(e)}
-        )
-=======
         # 先尝试从缓存获取分析结果
         cached_result = cache.get_analysis_cache(dream_text, has_image=has_image)
         
@@ -203,7 +126,6 @@ async def analyze(
             print(f"[WARN] 保存梦境记录失败: {db_error}")
         
         return JSONResponse(result)
->>>>>>> d03ecce35c11d08008d4e0265dfea3455de45e7b
     finally:
         if tmp_file and os.path.exists(tmp_file):
             try:
@@ -211,19 +133,6 @@ async def analyze(
             except Exception:
                 pass
 
-@app.get("/analysis/history")
-async def get_analysis_history(limit: int = 10):
-    """获取分析历史"""
-    return {
-        "success": True,
-        "history": analysis_history[-limit:]
-    }
-
-@app.delete("/analysis/history")
-async def clear_analysis_history():
-    """清空分析历史"""
-    analysis_history.clear()
-    return {"success": True, "message": "历史记录已清空"}
 
 
 # 新增 /generate-image 路由，返回演示图片
@@ -795,5 +704,7 @@ async def get_cache_status():
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
 
 
