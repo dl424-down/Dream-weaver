@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
-import bgImage from './assets/image.jpg'
 
 const dreamText = ref('')
 const imageFile = ref(null)
@@ -592,76 +591,8 @@ function scrollTo(id) {
 
 <template>
   <div class="page">
-    <div class="nebula" :style="{ backgroundImage: `url(${bgImage})` }" />
-    <div class="container glass">
-      <h1 class="title">Dream Weaver</h1>
-      <p class="subtitle">在星云之间编织你的梦境</p>
-
-      <div class="form">
-        <label class="label">梦境描述</label>
-        <textarea class="input" rows="5" v-model="dreamText" placeholder="例：我梦见自己在云海之上飞行..." />
-
-        <div class="row">
-          <div class="file-wrap">
-            <input id="file-input" class="file" type="file" accept="image/*" @change="onFileChange" />
-            <label for="file-input" class="file-btn">选择图片</label>
-            <span class="file-hint">{{ imageFile ? imageFile.name : '未选择图片' }}</span>
-          </div>
-
-          <div v-if="historyLoading" class="loading-state-3d">
-            <div class="cube-loader">
-              <div class="cube-face front"></div><div class="cube-face back"></div>
-              <div class="cube-face right"></div><div class="cube-face left"></div>
-              <div class="cube-face top"></div><div class="cube-face bottom"></div>
-            </div>
-            <p class="loading-text-glitch">正在检索记忆库...</p>
-          </div>
-
-          <div v-else-if="historyEntries.length === 0" class="empty-history">
-            <p>记忆库中暂无记录</p>
-          </div>
-
-          <div v-else class="history-list-sidebar">
-            <div 
-              v-for="entry in filteredHistoryEntries" 
-              :key="entry.id" 
-              class="history-item-sidebar"
-              :class="{ 'active': selectedEntry && selectedEntry.id === entry.id }"
-              @click="loadEntryDetail(entry.id)"
-            >
-              <div class="history-item-preview">
-                <div class="preview-header">
-                  <input 
-                    type="checkbox" 
-                    class="entry-checkbox"
-                    :checked="selectedEntryIds.has(entry.id)"
-                    @click.stop="toggleEntrySelection(entry.id, $event)"
-                    @change="() => {}"
-                  />
-                  <span class="history-id">#{{ entry.id }}</span>
-                  <span class="history-date-small">{{ formatDate(entry.created_at) }}</span>
-                  <button 
-                    class="delete-btn" 
-                    @click.stop="deleteEntry(entry.id, $event)"
-                    title="删除（仅前端）"
-                  >
-                    ×
-                  </button>
-                </div>
-                <p class="preview-text">{{ entry.preview }}</p>
-                <div class="preview-tags">
-                  <span v-if="entry.has_analysis" class="tag tag-analysis">分析</span>
-                  <span v-if="entry.has_image" class="tag tag-image">图片</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 主内容区域 -->
-    <div class="main-content" :class="{ 'sidebar-open': historyVisible && !sidebarCollapsed }">
+    <div class="main-content" :class="{ 'sidebar-open': historyVisible && !sidebarCollapsed, 'sidebar-collapsed': historyVisible && sidebarCollapsed }">
       <!-- 详情内容显示在主内容区域 -->
       <Transition name="fade">
         <div v-if="selectedEntry" class="detail-content-main">
@@ -734,82 +665,76 @@ function scrollTo(id) {
         </div>
       </Transition>
 
-      <!-- 如果没有选择详情，显示主界面 -->
+      <!-- 如果没有选择详情，显示主界面（参考图：底层 Three.js 星空，上层玻璃卡片） -->
       <Transition name="fade">
         <div v-if="!selectedEntry" class="content-wrapper">
-      
-      <header class="dream-header">
-        <h1 class="glitch-title" data-text="DREAM WEAVER">DREAM WEAVER</h1>
-        <div class="subtitle-line">
-          <span class="line"></span>
-          <span class="text-glow">解析潜意识的星图</span>
-          <span class="line"></span>
-        </div>
-      </header>
+          <header class="dream-header">
+            <h1 class="dream-header-title">解析潜意识的星图</h1>
+            <p class="dream-header-subtitle">ANALYZING THE STAR MAP OF THE SUBCONSCIOUS</p>
+          </header>
 
-      <div class="crystal-capsule input-enter">
-        <div class="inner-content">
-          <label class="holo-label" >输入梦境内容</label>
-          
-          <div class="input-field-wrap">
-            <textarea 
-              v-model="dreamText" 
-              class="hologram-input" 
-              rows="4" 
-              placeholder="我看见时间在倒流，巨大的鲸鱼游过云层..."
-            ></textarea>
-            <div class="corner-accents-3d">
-              <div class="c-piece tl"></div><div class="c-piece tr"></div>
-              <div class="c-piece bl"></div><div class="c-piece br"></div>
+          <section class="glass-panel dream-input-card">
+            <div class="card-title-row">
+              <h2 class="card-title">输入梦境内容</h2>
+              <span class="card-hint">Describe your dreamscape</span>
             </div>
-          </div>
 
-          <div class="control-deck">
-            <div class="upload-module">
+            <div class="upload-buttons">
               <input id="file-upload" type="file" accept="image/*" @change="onFileChange" hidden />
-              <label for="file-upload" class="cyber-btn small" :class="{ 'active': imageFile }">
-                <span class="btn-content">
-                  <i class="icon-upload"></i> {{ imageFile ? '影像已加载' : '上传视觉碎片' }}
-                </span>
+              <label for="file-upload" class="upload-btn" :class="{ 'active': imageFile }">
+                <span class="material-icons-round">image</span>
+                <span>{{ imageFile ? '影像已加载' : '上传视觉碎片' }}</span>
               </label>
-              <button v-if="imageFile" @click="imageFile=null" class="remove-file">×</button>
-            </div>
-
-            <div class="action-module">
-              <button class="cyber-btn primary" :disabled="loading" @click="analyze">
-                <span class="btn-bg-anim"></span>
-                <span class="btn-text">{{ loading ? '正在链接星弦...' : '深度解析' }}</span>
-              </button>
-              
-              <button class="cyber-btn secondary" :disabled="loading" @click="analyzeTextOnly">
-                <span class="btn-text">文本分析</span>
-              </button>
-
-              <button class="cyber-btn magic" :disabled="loading || loadingImage" @click="generateImage">
-                <span class="btn-bg-anim"></span>
-                <span class="btn-text">
-                  {{ loadingImage ? '物质构筑中...' : '具象化梦境' }}
-                </span>
-              </button>
-
-              <button class="cyber-btn cinema" :disabled="loading || loadingVideo" @click="generateVideo">
-                <span class="btn-bg-anim"></span>
-                <span class="btn-text">
-                  {{ loadingVideo ? '时光编织中...' : '时光投影' }}
-                </span>
-              </button>
-
-              <button class="cyber-btn settings-toggle" @click="videoSettingsExpanded = !videoSettingsExpanded">
-                <span class="btn-text">{{ videoSettingsExpanded ? '▼ 视频参数' : '▶ 视频参数' }}</span>
-              </button>
-
-              <button class="cyber-btn history" @click="toggleSidebar">
-                <span class="btn-text">查找往期回忆</span>
+              <button v-if="imageFile" type="button" class="remove-file-btn" @click="imageFile=null" aria-label="移除">×</button>
+              <button type="button" class="upload-btn" disabled title="敬请期待">
+                <span class="material-icons-round">mic</span>
+                <span>上传音频</span>
               </button>
             </div>
 
-            <!-- 视频参数设置 -->
-            <div v-if="videoSettingsExpanded" class="video-settings-panel glass-panel-3d">
+            <div class="textarea-wrap">
+              <textarea
+                v-model="dreamText"
+                class="dream-textarea"
+                rows="5"
+                placeholder="我看见时间在倒流，巨大的鲸鱼游过云层..."
+              />
+              <button
+                type="button"
+                class="voice-input-btn"
+                :disabled="!speechSupported"
+                :title="speechSupported ? '语音输入' : '当前浏览器不支持'"
+                @click="toggleRecording"
+              >
+                <span class="material-icons-round">mic</span>
+                <span class="voice-label">语音输入</span>
+              </button>
+            </div>
+
+            <div class="action-buttons">
+              <button type="button" class="action-btn" :disabled="loading" @click="analyze">
+                <span class="material-icons-round">psychology</span>
+                <span>{{ loading ? '解析中...' : '深度解析' }}</span>
+              </button>
+              <button type="button" class="action-btn" :disabled="loading" @click="analyzeTextOnly">
+                <span class="material-icons-round">notes</span>
+                <span>文本分析</span>
+              </button>
+              <button type="button" class="action-btn" :disabled="loading || loadingImage" @click="generateImage">
+                <span class="material-icons-round">visibility</span>
+                <span>{{ loadingImage ? '生成中...' : '具象化梦境' }}</span>
+              </button>
+              <button type="button" class="action-btn" :disabled="loading || loadingVideo" @click="generateVideo">
+                <span class="material-icons-round">timeline</span>
+                <span>{{ loadingVideo ? '生成中...' : '时光投影' }}</span>
+              </button>
+              <button type="button" class="action-btn" @click="videoSettingsExpanded = !videoSettingsExpanded">
+                <span class="material-icons-round">play_circle</span>
+                <span>{{ videoSettingsExpanded ? '收起视频参数' : '视频参数' }}</span>
+              </button>
+            </div>
+
+            <div v-if="videoSettingsExpanded" class="video-settings-panel glass-inner">
               <div class="settings-content">
                 <div class="setting-item">
                   <label>视频时长</label>
@@ -828,13 +753,19 @@ function scrollTo(id) {
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div v-if="error" class="system-alert">
-            <span class="alert-icon">!</span> {{ error }}
-          </div>
-        </div>
-      </div>
+
+            <div class="history-link-wrap">
+              <button type="button" class="history-link-btn" @click="toggleSidebar">
+                <span class="material-icons-round">history</span>
+                <span>查找往期回忆</span>
+                <span class="material-icons-round arrow">chevron_right</span>
+              </button>
+            </div>
+
+            <div v-if="error" class="system-alert">
+              <span class="alert-icon">!</span> {{ error }}
+            </div>
+          </section>
 
       <div v-if="result" class="result">
         <h2>梦境分析结果</h2>
@@ -978,7 +909,7 @@ function scrollTo(id) {
     </div>
   </div>
 
-  <canvas ref="canvasRef" style="position: fixed; top: 0; left: 0; z-index: 0;"></canvas>
+  <canvas ref="canvasRef" class="dream-canvas-bg"></canvas>
   
 </template>
 
@@ -990,172 +921,261 @@ function scrollTo(id) {
   --glass-border: rgba(168, 85, 247, 0.2);
 }
 
+/* 底层为 Three.js 星空，.page 仅做透明容器，内容在上层 */
 .page {
   position: relative;
+  z-index: 1;
   min-height: 100vh;
-  background: radial-gradient(1200px 600px at 20% 10%, rgba(140, 120, 255, .25), transparent 60%),
-              radial-gradient(900px 500px at 80% 20%, rgba(255, 150, 200, .2), transparent 60%),
-              radial-gradient(1000px 800px at 50% 100%, rgba(60, 180, 255, .15), transparent 60%),
-              #0a0f1f;
-  color: #eef2ff;
+  background: transparent;
+  color: #e2e8f0;
   overflow: hidden;
   display: flex;
 }
-.nebula {
-  position: absolute;
-  inset: -10% -10% -10% -10%;
-  background: center/cover no-repeat;
+/* 3D 星空画布作为背景，z-index 低于 .page 以保证表单等内容在上层 */
+.dream-canvas-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 0;
   pointer-events: none;
 }
-.container {
-  position: relative;
-  max-width: 1560px;
-  margin: 0 auto;
-  padding: 60px 20px;
+
+/* ========== 参考图样式：玻璃卡片 + 底部指标卡 ========== */
+.glass-panel {
+  backdrop-filter: blur(24px);
+  background: rgba(30, 41, 59, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.glass-inner {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
 }
 
-.dream-header { text-align: center; margin-bottom: 70px; }
-
-.glitch-title {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 4.5rem;
-  font-weight: 900;
-  letter-spacing: 8px;
-  color: transparent;
-  background: linear-gradient(to bottom, #fff 30%, #a5b4fc);
-  -webkit-background-clip: text;
-  background-clip: text;
-  text-shadow: 0 2px 5px rgba(0,0,0,0.5), 0 0 30px rgba(168, 85, 247, 0.8);
-  animation: titlePulse 5s ease-in-out infinite alternate;
+.dream-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
 }
-@keyframes titlePulse { from { filter: brightness(1); } to { filter: brightness(1.3); text-shadow: 0 0 50px rgba(168, 85, 247, 1); } }
-
-.subtitle-line {
-  display: flex; align-items: center; justify-content: center; gap: 20px;
+.dream-header-title {
+  font-size: 2rem;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  color: #f8fafc;
+  margin: 0 0 0.5rem 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
-.subtitle-line .line { flex: 1; max-width: 150px; height: 2px; background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent); }
-.text-glow { font-size: 1.2rem; letter-spacing: 4px; color: #cbd5e1; text-shadow: 0 0 10px var(--neon-cyan); }
-
-.crystal-capsule {
-  background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(0,0,0,0.2));
-  backdrop-filter: blur(30px) saturate(1.2);
-  border: 1px solid var(--glass-border);
-  box-shadow: 
-    0 20px 50px rgba(0,0,0,0.5), 
-    inset 0 2px 5px rgba(255,255,255,0.1),
-    inset 0 -2px 5px rgba(0,0,0,0.3);
-  border-radius: 24px;
-  padding: 5px;
-  transform-style: preserve-3d;
-  animation: capsuleFloat 8s ease-in-out infinite;
-}
-@keyframes capsuleFloat { 0%, 100% { transform: translateY(0) rotateX(1deg); } 50% { transform: translateY(-15px) rotateX(-1deg); } }
-
-.inner-content {
-  background: rgba(10, 10, 30, 0.5);
-  border-radius: 20px;
-  padding: 35px;
-  border: 1px solid rgba(168, 85, 247, 0.15);
+.dream-header-subtitle {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin: 0;
+  opacity: 0.9;
 }
 
-.holo-label {
-  font-family: 'Orbitron'; color: var(--neon-cyan); font-size: 1rem; margin-bottom: 15px; letter-spacing: 2px;
-  text-shadow: 0 0 8px var(--neon-cyan);
+.dream-input-card {
+  border-radius: 1.5rem;
+  padding: 2rem 2.5rem;
+  margin-bottom: 2rem;
+  max-width: 72rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+.card-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.card-title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #f8fafc;
+  margin: 0;
+}
+.card-hint {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  font-weight: 300;
 }
 
-.input-field-wrap { position: relative; margin-top:20px;margin-bottom: 30px; transform-style: preserve-3d;}
-
-.hologram-input {
-  width: 100%;
-  background: rgba(2, 6, 23, 0.6);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  color: #fff;
-  padding: 20px;
-  font-size: 1.1rem;
-  line-height: 1.8;
-  border-radius: 8px;
-  outline: none;
-  transition: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+.upload-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
 }
-.hologram-input:focus {
-  border-color: var(--neon-purple);
-  box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 40px rgba(168, 85, 247, 0.3);
-  background: rgba(2, 6, 23, 0.8);
-  transform: translateZ(20px);
-}
-
-.corner-accents-3d {
-    position: absolute; inset: -5px; pointer-events: none;
-    transform: translateZ(10px);
-}
-.c-piece { position: absolute; width: 20px; height: 20px; border: 2px solid var(--neon-cyan); opacity: 0.7; transition: 0.3s; }
-.input-field-wrap:hover .c-piece { border-color: var(--neon-pink); opacity: 1; box-shadow: 0 0 15px var(--neon-pink); }
-.tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
-.tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
-.bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
-.br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
-
-.control-deck { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 25px; margin-top: 30px;}
-.action-module { display: flex; gap: 15px; flex-wrap: wrap; }
-
-.cyber-btn {
-  position: relative;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--glass-border);
-  color: #fff;
-  padding: 14px 30px;
-  font-family: 'Rajdhani'; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  font-size: 0.875rem;
   cursor: pointer;
-  overflow: hidden;
-  transition: 0.4s;
-  clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+  transition: background 0.2s, border-color 0.2s;
 }
-.cyber-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.cyber-btn:not(:disabled):hover { transform: translateY(-3px) scale(1.02); }
-
-.btn-bg-anim {
-    position: absolute; inset: 0; 
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    transform: translateX(-100%); transition: 0.6s; z-index: 0;
+.upload-btn .material-icons-round { font-size: 1.125rem; }
+.upload-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
-.cyber-btn:hover .btn-bg-anim { transform: translateX(100%); }
-.btn-text { position: relative; z-index: 1; text-shadow: 0 0 5px currentColor; }
-
-.cyber-btn.primary { border-color: var(--neon-purple); box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
-.cyber-btn.primary:hover { background: rgba(168, 85, 247, 0.2); box-shadow: 0 0 40px rgba(168, 85, 247, 0.6); }
-
-.cyber-btn.magic { border-color: var(--neon-pink); box-shadow: 0 0 15px rgba(236, 72, 153, 0.2); }
-.cyber-btn.magic:hover { background: rgba(236, 72, 153, 0.2); box-shadow: 0 0 40px rgba(236, 72, 153, 0.6); }
-
-.cyber-btn.cinema { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
-.cyber-btn.cinema:hover { background: rgba(59, 130, 246, 0.2); box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
-
-.cyber-btn.secondary:hover { border-color: #fff; background: rgba(255,255,255,0.1); }
-
-.cyber-btn.history { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
-.cyber-btn.history:hover { background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); }
-
-.cyber-btn.small { padding: 10px 20px; font-size: 0.8rem; clip-path: none; border-radius: 50px; border-color: #64748b;}
-.cyber-btn.small.active { border-color: var(--neon-cyan); background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 20px rgba(6, 182, 212, 0.4); }
-
-.cyber-btn.settings-toggle { 
-    padding: 8px 16px; 
-    font-size: 0.85rem;
-    border-color: #8b5cf6;
-    background: rgba(139, 92, 246, 0.1);
+.upload-btn.active {
+  border-color: var(--neon-cyan);
+  background: rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
 }
-.cyber-btn.settings-toggle:hover {
-    background: rgba(139, 92, 246, 0.2);
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+.upload-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.remove-file-btn {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.textarea-wrap {
+  position: relative;
+  margin-bottom: 2rem;
+}
+.dream-textarea {
+  width: 100%;
+  min-height: 16rem;
+  padding: 1.5rem 1.5rem 4rem 1.5rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.dream-textarea::placeholder { color: rgba(148, 163, 184, 0.7); }
+.dream-textarea:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+.voice-input-btn {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.voice-input-btn:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 0 20px rgba(255, 255, 255, 0.3); }
+.voice-input-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.voice-input-btn .material-icons-round { font-size: 1.125rem; }
+.voice-label { display: none; }
+@media (min-width: 640px) { .voice-label { display: inline; } }
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+@media (min-width: 640px) {
+  .action-buttons { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1024px) {
+  .action-buttons { grid-template-columns: repeat(5, 1fr); }
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.action-btn .material-icons-round { font-size: 1rem; color: #94a3b8; }
+.action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.action-btn:hover:not(:disabled) .material-icons-round { color: #fff; }
+.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.history-link-wrap { margin-bottom: 0; }
+.history-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.history-link-btn .material-icons-round { font-size: 1rem; }
+.history-link-btn .arrow { margin-left: 0.25rem; }
+.history-link-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
 }
 
 .video-settings-panel {
-    margin-top: 20px;
-    padding: 20px;
-    border-radius: 8px;
-    animation: slideDown 0.3s ease-out;
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  animation: slideDown 0.3s ease-out;
 }
+
+/* 保留：结果区 / 侧边栏使用的按钮 */
+.cyber-btn.secondary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.cyber-btn.secondary:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.25); }
+.cyber-btn.small {
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.cyber-btn.small:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.cyber-btn.small:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @keyframes slideDown {
     from {
@@ -1496,27 +1516,27 @@ function scrollTo(id) {
   transform: scale(1.1);
 }
 
-/* 主内容区域 */
+/* 主内容区域：历史记录在右侧，主内容不随侧边栏被遮挡，仅宽度收缩 */
 .main-content {
   flex: 1;
-  margin-left: 0;
-  transition: margin-left 0.3s ease;
+  margin-right: 0;
+  transition: margin-right 0.3s ease, width 0.3s ease;
   min-height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
   width: 100%;
   position: relative;
-  /* 确保主内容区域的滚动不影响侧边栏 */
   z-index: 1;
 }
 
+/* 历史记录在右侧展开时，主内容区留出右侧空间，不被遮挡 */
 .main-content.sidebar-open {
-  margin-left: 260px;
-  width: calc(100% - 260px);
+  margin-right: 350px;
+  width: calc(100% - 350px);
 }
 
-.sidebar-container.collapsed + .main-content.sidebar-open {
-  margin-left: 60px;
+.main-content.sidebar-collapsed {
+  margin-right: 60px;
   width: calc(100% - 60px);
 }
 
@@ -1671,18 +1691,36 @@ function scrollTo(id) {
 .btn:disabled { opacity: .6; cursor: not-allowed; }
 .error { color: #fecaca; }
 
-.result { margin-top: 28px; display: grid; gap: 18px; }
-.kv { display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); }
-.k { opacity: .85; font-weight: 700; margin-bottom: 6px; }
-.v { opacity: .95; }
-.block { padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.2); }
+.result {
+  margin-top: 2.5rem;
+  margin-bottom: 2.5rem;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 70rem;
+  padding: 2rem 2.5rem;
+  display: grid;
+  gap: 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+}
+.result h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  color: #f8fafc;
+}
+.kv { display: grid; gap: 0.75rem; grid-template-columns: repeat(3, 1fr); }
+.k { opacity: .85; font-weight: 700; margin-bottom: 4px; font-size: 0.875rem; color: #94a3b8; }
+.v { opacity: .95; font-size: 0.9375rem; line-height: 1.6; }
+.block { padding-top: 1rem; margin-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,.15); }
+.block .v { margin-top: 0.25rem; }
 
 .content-wrapper {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 40px 20px;
-  max-width: 1200px;
+  padding: 48px 24px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -1736,6 +1774,8 @@ function scrollTo(id) {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(168, 85, 247, 0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 .image-wrapper-tilt:hover {
@@ -1747,6 +1787,7 @@ function scrollTo(id) {
   height: auto;
   display: block;
   border-radius: 12px;
+  max-width: 100%;
 }
 
 .video-wrapper {
