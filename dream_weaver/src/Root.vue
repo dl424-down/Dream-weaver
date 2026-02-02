@@ -323,7 +323,9 @@ function animate() {
 .main-area {
   flex: 1;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 @media (max-width: 768px) {

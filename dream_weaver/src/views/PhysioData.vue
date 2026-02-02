@@ -1,195 +1,302 @@
+<script setup>
+import { ref } from 'vue'
+
+const activeRange = ref('1h')
+const timeRanges = ['1h', '4h', '8h']
+const showActivityModal = ref(false)
+
+const statCards = [
+  { 
+    title: "心率变异性", 
+    value: "65", 
+    unit: "ms", 
+    trend: "up", 
+    trendText: "较昨晚 +5%", 
+    dotColor: "#f87171", // tailwind red-400
+    icon: "favorite", 
+    isPulse: true,
+    trendClass: "trend-up"
+  },
+  { 
+    title: "呼吸频率", 
+    value: "14", 
+    unit: "次/分", 
+    trend: null,
+    trendText: "节律平稳", 
+    dotColor: "#38bdf8", // tailwind sky-400
+    icon: "air", 
+    trendColor: "#9ca3af",
+    trendClass: "trend-neutral"
+  },
+  { 
+    title: "血氧饱和度", 
+    value: "98%", 
+    unit: "", 
+    trend: null,
+    trendText: "理想水平", 
+    dotColor: "#34d399", // tailwind emerald-400
+    icon: "water_drop",
+    trendClass: "trend-good"
+  }
+]
+
+const smallStats = [
+  { icon: "bedtime", label: "睡眠质量", value: "84%", subValue: "+2%", subClass: "text-green" },
+  { icon: "auto_fix_high", label: "梦境生动度", value: "高" },
+  { icon: "sync", label: "分析状态", value: "已同步", valueClass: "text-green" }
+]
+
+// Mock data for activity details
+const activityEvents = [
+  { time: '01:15', type: '翻身', duration: '12s', intensity: 'low' },
+  { time: '02:40', type: '微动', duration: '5s', intensity: 'low' },
+  { time: '04:20', type: '肢体活动', duration: '45s', intensity: 'high' },
+  { time: '06:10', type: '翻身', duration: '18s', intensity: 'medium' }
+]
+</script>
+
 <template>
-  <!-- 1. 应用你提供的 page-wrapper 类作为根容器，支持自然滚动 -->
-  <div class="page-wrapper">
-    
-    <!-- 2. 头部样式调整为你提供的 page-header -->
-    <header class="page-header">
-      <h1>生理数据</h1>
-      <p>身体指标与睡眠相关数据的可视化面板</p>
-    </header>
-
-    <!-- 3. 内容区域：保留之前的玻璃拟态设计，但放入文档流中 -->
-    <div class="dashboard-content">
+  <div class="physio-container custom-scroll relative">
+    <div class="content-wrapper">
       
-      <!-- 主面板：包含上、中、下三部分 -->
-      <!-- 这里我保留了玻璃质感，但去掉了之前可能导致不可滚动的绝对定位或固定高度 -->
-      <main class="main-glass-panel">
+      <!-- Header -->
+      <header class="main-header">
+        <h1 class="glow-title">生理数据监控</h1>
+        <p class="subtitle">PHYSIOLOGICAL DATA MONITORING</p>
+      </header>
+
+      <!-- Dashboard Panel -->
+      <div class="glass-panel">
         
-        <!-- 第一行：三个生理指标小卡片 -->
-        <div class="top-row-grid">
-          <!-- 心率变异性 -->
-          <div class="glass-card small-card">
-            <div class="card-content">
-              <div class="card-header">
-                <span class="dot red-pulse"></span>
-                <span class="label">心率变异性</span>
+        <!-- Top Row: Primary Vital Signs -->
+        <div class="grid-row grid-3">
+          <div v-for="(card, index) in statCards" :key="index" class="glass-card stat-card">
+            <div class="card-left">
+              <div class="card-label">
+                <span class="status-dot" :class="{ 'pulse-anim': card.isPulse }" :style="{ backgroundColor: card.dotColor }"></span>
+                <h3>{{ card.title }}</h3>
               </div>
-              <div class="card-value">
-                65 <span class="unit">ms</span>
+              <div class="card-value-group">
+                <span class="value">{{ card.value }}</span>
+                <span v-if="card.unit" class="unit">{{ card.unit }}</span>
               </div>
-              <div class="card-footer text-green">
-                <span class="material-symbols-outlined icon-sm">trending_up</span>
-                较昨晚 +5%
-              </div>
-            </div>
-            <div class="card-icon-circle">
-              <span class="material-symbols-outlined">favorite</span>
-            </div>
-          </div>
-
-          <!-- 呼吸频率 -->
-          <div class="glass-card small-card">
-            <div class="card-content">
-              <div class="card-header">
-                <span class="dot blue-dot"></span>
-                <span class="label">呼吸频率</span>
-              </div>
-              <div class="card-value">
-                14 <span class="unit">次/分</span>
-              </div>
-              <div class="card-footer">
-                节律平稳
+              <div class="card-trend" :class="card.trendClass">
+                <span v-if="card.trend === 'up'" class="material-symbols-outlined icon-xs">trending_up</span>
+                <span>{{ card.trendText }}</span>
               </div>
             </div>
-            <div class="card-icon-circle">
-              <span class="material-symbols-outlined">air</span>
-            </div>
-          </div>
-
-          <!-- 血氧饱和度 -->
-          <div class="glass-card small-card">
-            <div class="card-content">
-              <div class="card-header">
-                <span class="dot green-dot"></span>
-                <span class="label">血氧饱和度</span>
-              </div>
-              <div class="card-value">
-                98%
-              </div>
-              <div class="card-footer text-green">
-                理想水平
-              </div>
-            </div>
-            <div class="card-icon-circle">
-              <span class="material-symbols-outlined">water_drop</span>
+            <div class="card-right icon-wrapper" :class="{ 'pulse-shadow': card.isPulse }">
+              <span class="material-symbols-outlined icon-md">{{ card.icon }}</span>
             </div>
           </div>
         </div>
 
-        <!-- 第二行：睡眠周期活动（大图表） -->
+        <!-- Middle Row: Chart -->
         <div class="glass-card chart-card">
           <div class="chart-header">
             <div>
-              <h3>睡眠周期活动</h3>
-              <p>与梦境强度阶段相关</p>
+              <h2>睡眠周期活动</h2>
+              <p class="sub-text">与梦境强度阶段相关</p>
             </div>
-            <div class="time-toggle">
-              <button 
-                v-for="time in ['1小时', '4小时', '8小时']" 
-                :key="time"
-                :class="{ active: activeTime === time }"
-                @click="activeTime = time"
+            
+            <div class="time-selector">
+              <button
+                v-for="range in timeRanges"
+                :key="range"
+                @click="activeRange = range"
+                class="time-btn"
+                :class="{ active: activeRange === range }"
               >
-                {{ time }}
+                {{ range.replace('h', '小时') }}
               </button>
             </div>
           </div>
-          
+
           <div class="chart-body">
-            <div class="custom-scrollbar">
-               <div class="thumb"></div>
+            <!-- Y-Axis -->
+            <div class="y-axis">
+              <span>100</span><span>75</span><span>50</span><span>25</span><span>0</span>
             </div>
-            <div class="svg-wrapper">
-              <svg viewBox="0 0 800 200" preserveAspectRatio="none">
+
+            <div class="chart-area">
+              <!-- Grid Lines -->
+              <div class="grid-lines">
+                <div class="line dashed"></div><div class="line dashed"></div>
+                <div class="line dashed"></div><div class="line dashed"></div>
+                <div class="line solid"></div>
+              </div>
+
+              <!-- SVG Chart -->
+              <svg class="chart-svg" preserveAspectRatio="none" viewBox="0 0 850 280">
                 <defs>
-                  <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="rgba(255, 255, 255, 0.3)" />
-                    <stop offset="100%" stop-color="rgba(255, 255, 255, 0)" />
+                  <linearGradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(255, 255, 255, 0.2)"></stop>
+                    <stop offset="100%" stop-color="rgba(255, 255, 255, 0)"></stop>
                   </linearGradient>
                 </defs>
-                <path d="M0,150 C150,150 200,50 300,80 C400,110 500,160 600,120 C700,80 750,100 800,140 V200 H0 Z" fill="url(#lineGradient)" />
-                <path d="M0,150 C150,150 200,50 300,80 C400,110 500,160 600,120 C700,80 750,100 800,140" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" class="glow-line" />
-                <circle cx="300" cy="80" r="6" fill="white" class="glow-point" />
+                <path d="M0,200 C100,180 150,80 250,120 C350,160 450,220 550,140 C650,60 750,100 850,180 L850,280 L0,280 Z" fill="url(#chartGradient)"></path>
+                <path class="path-glow" d="M0,200 C100,180 150,80 250,120 C350,160 450,220 550,140 C650,60 750,100 850,180" fill="none" stroke="white" stroke-linecap="round" stroke-width="3"></path>
+                <circle cx="250" cy="120" fill="white" r="5"></circle>
               </svg>
-              <div class="floating-tag">
-                <div class="tag-content">
-                  <strong>REM 阶段 2</strong>
-                  <span>凌晨 02:45</span>
+
+              <!-- Tooltip -->
+              <div class="chart-tooltip">
+                <div class="tooltip-box">
+                  REM 阶段 2<br/><span class="tooltip-time">凌晨 02:45</span>
                 </div>
-                <div class="tag-line"></div>
+              </div>
+            </div>
+
+            <!-- X-Axis -->
+            <div class="x-axis">
+              <span>23:00</span><span>01:00</span><span>03:00</span><span>05:00</span><span>07:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Third Row: Brainwave & Activity -->
+        <div class="grid-row grid-2">
+          <!-- Brainwave Card -->
+          <div class="glass-card stat-row-card">
+            <div class="icon-square">
+              <span class="material-symbols-outlined">waves</span>
+            </div>
+            <div class="flex-grow">
+              <h3>脑电波模式</h3>
+              <p class="sub-text">正在分析 Theta 波</p>
+            </div>
+            <div class="text-right">
+              <span class="value-lg glow">Theta</span>
+              <span class="unit-block">4-8 Hz</span>
+            </div>
+          </div>
+
+          <!-- Activity Card -->
+          <div class="glass-card stat-row-card">
+            <div class="icon-square activity-icon-bg">
+              <span class="material-symbols-outlined">notifications_active</span>
+            </div>
+            <div class="flex-grow">
+              <h3>检测到身体活动</h3>
+              <p class="sub-text">凌晨 04:20 有轻微活动</p>
+            </div>
+            <button class="action-btn" @click="showActivityModal = true">查看详情</button>
+          </div>
+        </div>
+
+        <!-- Bottom Row: Small Stats -->
+        <div class="grid-row grid-3">
+          <div v-for="(stat, index) in smallStats" :key="index" class="glass-card small-stat-card">
+            <div class="icon-circle">
+              <span class="material-symbols-outlined icon-sm">{{ stat.icon }}</span>
+            </div>
+            <div>
+              <p class="label-xs">{{ stat.label }}</p>
+              <div class="value-row">
+                <span class="value-md" :class="stat.valueClass">{{ stat.value }}</span>
+                <span v-if="stat.subValue" class="sub-value" :class="stat.subClass">{{ stat.subValue }}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 第三行：双列布局 -->
-        <div class="bottom-row-grid">
-          <!-- 脑电波 -->
-          <div class="glass-card wide-card">
-            <div class="left-icon">
-              <span class="material-symbols-outlined">waves</span>
-            </div>
-            <div class="middle-text">
-              <h3>脑电波模式</h3>
-              <p>正在分析 Theta 波</p>
-            </div>
-            <div class="right-stat">
-              <span class="big-text">Theta</span>
-              <span class="small-text">4-8 HZ</span>
-            </div>
-          </div>
-
-          <!-- 身体活动 -->
-          <div class="glass-card wide-card">
-            <div class="left-icon">
-              <span class="material-symbols-outlined">notifications_active</span>
-            </div>
-            <div class="middle-text">
-              <h3>检测到身体活动</h3>
-              <p>凌晨 04:20 有轻微活动</p>
-            </div>
-            <div class="right-action">
-              <button class="action-btn">查看</button>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <!-- 底部独立区域：三个并排矩形 -->
-      <footer class="footer-stats">
-        <div class="glass-card footer-card">
-          <div class="circle-icon">
-            <span class="material-symbols-outlined">bedtime</span>
-          </div>
-          <div class="footer-info">
-            <p>睡眠质量</p>
-            <div class="footer-val">
-              84% <span class="text-green small">+2%</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="glass-card footer-card">
-          <div class="circle-icon">
-            <span class="material-symbols-outlined">auto_fix_high</span>
-          </div>
-          <div class="footer-info">
-            <p>梦境生动度</p>
-            <div class="footer-val">高</div>
-          </div>
-        </div>
-
-        <div class="glass-card footer-card">
-          <div class="circle-icon">
-            <span class="material-symbols-outlined">sync</span>
-          </div>
-          <div class="footer-info">
-            <p>分析状态</p>
-            <div class="footer-val text-green">已同步</div>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
+
+    <!-- === ACTIVITY DETAIL MODAL === -->
+    <Transition name="fade">
+      <div v-if="showActivityModal" class="modal-overlay" @click.self="showActivityModal = false">
+        <div class="glass-modal activity-modal">
+          
+          <div class="modal-header">
+            <div>
+              <h2 class="modal-title">体动监测详情</h2>
+              <p class="modal-subtitle">NOCTURNAL MOVEMENT ANALYSIS</p>
+            </div>
+            <button class="close-btn" @click="showActivityModal = false">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <div class="modal-body custom-scroll">
+            
+            <!-- Actigraphy Chart (Visual Representation) -->
+            <div class="actigraphy-section">
+              <div class="section-title">
+                <span class="material-symbols-outlined">bar_chart_4_bars</span>
+                Actigraphy / 动作描记图
+              </div>
+              <div class="actigraphy-chart">
+                <div class="acti-bars">
+                  <!-- Generate random-ish bars for visualization -->
+                  <div class="acti-bar" v-for="i in 40" :key="i" 
+                       :style="{ 
+                         height: (i === 28 ? '80%' : i === 8 ? '40%' : i === 15 ? '30%' : Math.random() * 15 + 2) + '%',
+                         opacity: (i === 28 ? 1 : 0.4),
+                         background: (i === 28 ? '#fbbf24' : 'white')
+                       }">
+                  </div>
+                </div>
+                <div class="acti-labels">
+                  <span>23:00</span>
+                  <span>02:00</span>
+                  <span>05:00</span>
+                  <span>08:00</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="activity-stats-grid">
+              <div class="stat-box">
+                <span class="label">Total Events</span>
+                <span class="val">4</span>
+              </div>
+              <div class="stat-box">
+                <span class="label">Peak Intensity</span>
+                <span class="val text-orange">Moderate</span>
+              </div>
+              <div class="stat-box">
+                <span class="label">Total Duration</span>
+                <span class="val">1m 20s</span>
+              </div>
+            </div>
+
+            <!-- Event List -->
+            <div class="event-list-section">
+              <div class="section-title">
+                <span class="material-symbols-outlined">history</span>
+                Event Log / 事件日志
+              </div>
+              <div class="event-list">
+                <div v-for="(event, idx) in activityEvents" :key="idx" class="event-item">
+                  <div class="event-time">{{ event.time }}</div>
+                  <div class="event-line">
+                    <div class="dot" :class="event.intensity === 'high' ? 'bg-orange' : 'bg-white'"></div>
+                    <div class="line"></div>
+                  </div>
+                  <div class="event-details">
+                    <div class="event-type">{{ event.type }}</div>
+                    <div class="event-meta">持续 {{ event.duration }} • 强度: {{ event.intensity }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Insight -->
+            <div class="ai-insight">
+              <span class="material-symbols-outlined icon">auto_awesome</span>
+              <p>
+                <span class="highlight">AI 分析：</span>
+                凌晨 04:20 的肢体活动与快速眼动期（REM）的结束相吻合。这种活动通常是正常的体位调整，有助于防止血液循环受阻，未检测到会对深度睡眠造成中断的异常躁动。
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </Transition>
+
   </div>
 </template>
 
@@ -200,217 +307,563 @@ const activeTime = ref('1小时');
 </script>
 
 <style scoped>
-/* 引入字体 */
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* --- 核心修改：应用你要求的底层样式 --- */
-.page-wrapper {
-  padding: 40px 40px 60px;
-  color: #e2e8f0;
-  font-family: 'Inter', sans-serif;
-  /* 确保页面可以自然滚动，去除之前的 fixed/height:100vh */
+/* Main Container Layout */
+.physio-container {
   width: 100%;
-  box-sizing: border-box; 
-  /* 如果你的父组件没有背景色，可以在这里加一个深色背景，
-     或者保持透明由父级控制。这里暂且保持透明以融入你的系统。 */
+  height: 100%;
+  overflow-y: auto;
+  padding: 40px 20px 80px;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
 }
 
-/* 头部样式：严格对应你提供的代码 */
-.page-header {
-  margin-bottom: 32px; /* 给内容留出间距 */
+.content-wrapper {
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
-.page-header h1 {
-  font-size: 26px;
-  margin: 0 0 8px;
-  font-weight: 600; /* 稍微加粗一点标题使其更清晰 */
+/* Header */
+.main-header {
+  text-align: center;
+  margin-bottom: 40px;
 }
 
-.page-header p {
+.glow-title {
+  font-size: 2.25rem;
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
   margin: 0;
-  color: #94a3b8;
-  font-size: 14px;
 }
 
-/* --- 内容区域布局 --- */
-.dashboard-content {
-  max-width: 1200px; /* 限制内容过宽 */
-  margin: 0 auto;    /* 居中显示 */
+.subtitle {
+  font-size: 0.75rem;
+  color: rgba(156, 163, 175, 1);
+  letter-spacing: 0.3em;
+  margin-top: 10px;
+  text-transform: uppercase;
 }
 
-/* --- 下方保留玻璃拟态的所有设计 --- */
-
-/* 主大面板样式 */
-.main-glass-panel {
-  /* 对应你给的 .placeholder-card 背景逻辑，稍微调整使其适合做大容器 */
-  background: rgba(15, 23, 42, 0.4); 
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 24px;
+/* Glass Panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 40px;
   padding: 30px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  margin-bottom: 24px;
-  /* 确保不会溢出屏幕，让其自适应高度 */
+  gap: 30px;
 }
 
-/* 通用玻璃卡片 */
 .glass-card {
-  background: rgba(255, 255, 255, 0.08); /* 稍微调亮一点以在深色背景上显现 */
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s;
-}
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.12);
+  padding: 24px;
 }
 
-/* 1. 第一行 Grid */
-.top-row-grid {
+/* Grids */
+.grid-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
 
-.small-card {
+.grid-3 {
+  grid-template-columns: 1fr;
+}
+
+.grid-2 {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Stat Cards */
+.stat-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 120px;
 }
-.card-content {
+
+.card-left {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   height: 100%;
 }
-.card-header {
+
+.card-label {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 8px;
 }
-.label { font-size: 12px; color: #cbd5e1; font-weight: 600; }
-.card-value { font-size: 36px; font-weight: 700; line-height: 1; margin: 10px 0; color: white; }
-.unit { font-size: 12px; font-weight: 400; color: #94a3b8; }
-.card-footer { font-size: 10px; color: #94a3b8; display: flex; align-items: center; }
-.card-icon-circle {
-  width: 48px; height: 48px; border-radius: 50%;
+
+.card-label h3 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #d1d5db;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pulse-anim {
+  animation: pulse 2s infinite;
+}
+
+.card-value-group {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.unit {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.card-trend {
+  font-size: 0.65rem;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.trend-up { color: #34d399; }
+.trend-neutral { color: #9ca3af; }
+.trend-good { color: #34d399; }
+
+.icon-wrapper {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: white;
 }
-.dot { width: 8px; height: 8px; border-radius: 50%; display: block; }
-.red-pulse { background: #ff6b6b; box-shadow: 0 0 8px #ff6b6b; }
-.blue-dot { background: #38bdf8; }
-.green-dot { background: #4ade80; }
-.text-green { color: #4ade80; }
-.icon-sm { font-size: 14px; margin-right: 2px; }
 
-/* 2. 第二行 图表 Grid */
-.chart-card {
-  min-height: 320px;
+.pulse-shadow {
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+/* Chart Card */
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.chart-header h2 {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.sub-text {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.time-selector {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 4px;
+  display: flex;
+}
+
+.time-btn {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  color: white;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.time-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.time-btn.active {
+  background: white;
+  color: black;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.chart-body {
   position: relative;
+  height: 300px;
+}
+
+.y-axis {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-}
-.chart-header {
-  display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;
-}
-.chart-header h3 { margin: 0; font-size: 18px; font-weight: 500; color: white; }
-.chart-header p { margin: 4px 0 0; font-size: 11px; color: #94a3b8; }
-
-.time-toggle {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 20px; padding: 4px; display: flex; gap: 4px;
-}
-.time-toggle button {
-  background: transparent; border: none; color: #94a3b8;
-  font-size: 11px; padding: 4px 12px; border-radius: 16px;
-  cursor: pointer; transition: all 0.2s;
-}
-.time-toggle button.active {
-  background: white; color: black; font-weight: bold;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: #6b7280;
+  padding-bottom: 20px; /* space for x-axis */
 }
 
-.chart-body { flex: 1; position: relative; display: flex; align-items: flex-end; }
-.svg-wrapper { width: 95%; height: 200px; position: relative; }
-.glow-line { filter: drop-shadow(0 0 6px rgba(255,255,255,0.6)); }
-.glow-point { filter: drop-shadow(0 0 8px white); }
-
-.floating-tag {
-  position: absolute; top: 30%; left: 37.5%;
-  transform: translate(-50%, -100%);
-  display: flex; flex-direction: column; align-items: center;
-}
-.tag-content {
-  background: rgba(255, 255, 255, 0.95); color: black;
-  padding: 6px 10px; border-radius: 8px; font-size: 10px;
-  text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-.tag-content strong { display: block; font-size: 11px; margin-bottom: 2px; }
-
-/* 模拟滚动条 */
-.custom-scrollbar {
-  position: absolute; right: 0; top: 20px; bottom: 20px; width: 6px;
-  background: rgba(255,255,255,0.05); border-radius: 3px;
-}
-.custom-scrollbar .thumb {
-  width: 100%; height: 40%; background: rgba(255,255,255,0.3);
-  border-radius: 3px; position: absolute; top: 30%;
+.chart-area {
+  margin-left: 30px;
+  height: calc(100% - 24px);
+  position: relative;
 }
 
-/* 3. 第三行 双列 Grid */
-.bottom-row-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+.grid-lines {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
-.wide-card {
-  display: flex; align-items: center; gap: 16px; padding: 16px 24px; height: 100px;
+
+.line {
+  width: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
-.left-icon {
-  width: 44px; height: 44px; background: rgba(255,255,255,0.1);
-  border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
-  display: flex; align-items: center; justify-content: center; color: white;
+.line.dashed { border-style: dashed; }
+.line.solid { border-color: rgba(255, 255, 255, 0.2); }
+
+.chart-svg {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
-.middle-text { flex: 1; }
-.middle-text h3 { margin: 0; font-size: 14px; color: white; }
-.middle-text p { margin: 4px 0 0; font-size: 11px; color: #94a3b8; }
-.big-text { font-size: 20px; font-weight: bold; color: white; }
-.small-text { display: block; font-size: 9px; color: #94a3b8; text-transform: uppercase; text-align: right; }
+
+.path-glow {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+}
+
+.chart-tooltip {
+  position: absolute;
+  left: 26%;
+  top: 25%;
+  transform: translate(-50%, -50%);
+}
+
+.tooltip-box {
+  background: rgba(255, 255, 255, 0.95);
+  color: black;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  border: 1px solid white;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.tooltip-time {
+  font-weight: 400;
+  opacity: 0.6;
+  font-size: 0.55rem;
+}
+
+.x-axis {
+  margin-left: 30px;
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: #6b7280;
+}
+
+/* Stat Row Cards (Brainwave/Activity) */
+.stat-row-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.icon-square {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.activity-icon-bg {
+  background: rgba(251, 191, 36, 0.15); /* amber tint */
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.activity-icon-bg span {
+  color: #fbbf24;
+}
+
+.flex-grow { flex: 1; min-width: 0; }
+.flex-grow h3 { font-size: 0.9rem; font-weight: 600; margin: 0; }
+
+.value-lg { font-size: 1.25rem; font-weight: 700; display: block; }
+.unit-block { font-size: 0.6rem; color: #6b7280; text-transform: uppercase; }
 
 .action-btn {
-  background: white; color: black; border: none; padding: 8px 20px;
-  border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: white;
+  color: black;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: 1px solid white;
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.action-btn:hover { background: #f1f5f9; }
+.action-btn:hover { background: rgba(255, 255, 255, 0.9); transform: scale(1.05); }
 
-/* 4. 底部独立区域 */
-.footer-stats {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+/* Small Stats */
+.small-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
 }
-.footer-card {
-  display: flex; align-items: center; gap: 16px; height: 80px;
-  background: rgba(15, 23, 42, 0.6); /* 使用你提供的 placeholder 背景色 */
-  border: 1px dashed rgba(148, 163, 184, 0.3); /* 呼应 dashed 边框风格，但保持圆角 */
+
+.icon-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.circle-icon {
-  width: 40px; height: 40px; border-radius: 50%;
+
+.label-xs {
+  font-size: 0.6rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 4px 0;
+}
+
+.value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.value-md { font-size: 1.1rem; font-weight: 700; }
+.sub-value { font-size: 0.65rem; }
+.text-green { color: #34d399; }
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+
+.glass-modal {
+  background: #0a0c10;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  width: 100%; max-width: 500px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 24px 30px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.modal-title { font-size: 1.25rem; font-weight: 600; margin: 0; }
+.modal-subtitle { font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-top: 4px; letter-spacing: 0.1em; }
+
+.close-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  width: 32px; height: 32px; border-radius: 50%;
+  color: white; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.close-btn:hover { background: rgba(255,255,255,0.2); transform: rotate(90deg); }
+
+.modal-body {
+  padding: 30px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 30px;
+}
+
+.section-title {
+  font-size: 0.75rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.actigraphy-chart {
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  padding: 20px 20px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.acti-bars {
+  height: 100px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.acti-bar {
+  flex: 1;
+  border-radius: 2px;
+  transition: height 0.3s;
+}
+
+.acti-labels {
+  display: flex; justify-content: space-between;
+  font-size: 0.6rem; color: rgba(255,255,255,0.3);
+}
+
+.activity-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+
+.stat-box {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
-  display: flex; align-items: center; justify-content: center; color: white;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
 }
-.footer-info p { margin: 0 0 4px 0; font-size: 10px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; }
-.footer-val { font-size: 18px; font-weight: 700; color: white; }
-.footer-val .small { font-size: 10px; margin-left: 4px; vertical-align: middle; }
 
-/* 响应式 */
-@media (max-width: 768px) {
-  .top-row-grid, .bottom-row-grid, .footer-stats { grid-template-columns: 1fr; }
-  .page-wrapper { padding: 20px; }
+.stat-box .label { font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+.stat-box .val { font-size: 0.9rem; font-weight: 700; }
+.text-orange { color: #fbbf24; }
+
+.event-list {
+  display: flex; flex-direction: column;
+}
+
+.event-item {
+  display: flex; gap: 16px;
+  position: relative;
+  padding-bottom: 24px;
+}
+.event-item:last-child { padding-bottom: 0; }
+
+.event-time {
+  font-size: 0.75rem; color: rgba(255,255,255,0.5); font-family: monospace; width: 40px; padding-top: 2px;
+}
+
+.event-line {
+  display: flex; flex-direction: column; align-items: center;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1); }
+.bg-orange { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.5); }
+.bg-white { background: white; }
+.line { width: 1px; flex: 1; background: rgba(255,255,255,0.1); margin-top: 4px; }
+.event-item:last-child .line { display: none; }
+
+.event-details { padding-top: 0; }
+.event-type { font-size: 0.9rem; font-weight: 500; }
+.event-meta { font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+.ai-insight {
+  background: rgba(251, 191, 36, 0.05);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex; gap: 12px;
+}
+.ai-insight .icon { color: #fbbf24; font-size: 1.2rem; }
+.ai-insight p { font-size: 0.8rem; line-height: 1.5; color: rgba(255,255,255,0.7); margin: 0; }
+.ai-insight .highlight { color: #fbbf24; font-weight: 600; }
+
+/* Icons & Typography */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+.icon-xs { font-size: 14px; }
+.icon-sm { font-size: 18px; }
+.icon-md { font-size: 24px; }
+.icon-lg { font-size: 32px; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Transitions */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* Scrollbar */
+.custom-scroll::-webkit-scrollbar {
+  display: none;
+}
+.custom-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>
-
-
